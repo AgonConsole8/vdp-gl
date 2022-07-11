@@ -840,10 +840,10 @@ struct EmuState {
 
 struct Print {
   virtual size_t write(uint8_t) = 0;
-  virtual size_t write(const uint8_t * buffer, size_t size);
+  virtual size_t write(const uint8_t * buffer, size_t size) = 0;
   size_t write(const char *str) {
     if (str == NULL)
-        return 0;
+      return 0;
     return write((const uint8_t *)str, strlen(str));
   }
   void printf(const char * format, ...) {
@@ -861,7 +861,7 @@ struct Print {
   }
 };
 
-struct Stream : public Print{
+struct Stream : public Print {
 };
 
 #endif  // ifdef ARDUINO
@@ -912,7 +912,7 @@ struct Stream : public Print{
  *         char c = Terminal.read();
  *         switch (c) {
  *           case 0x7F:       // DEL -> backspace + ESC[K
- *             Terminal.write("\b\e[K");
+ *             Terminal.write("\\b\e[K");
  *             break;
  *           case 0x0D:       // CR  -> CR + LF
  *             Terminal.write("\r\n");
