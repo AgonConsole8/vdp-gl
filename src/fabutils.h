@@ -44,6 +44,10 @@
 #include "sdmmc_cmd.h"
 #include "soc/frc_timer_reg.h"
 
+#ifdef ARDUINO
+#include "Arduino.h"
+#endif
+
 
 namespace fabgl {
 
@@ -519,6 +523,54 @@ struct FontInfo {
   uint16_t codepage;
 };
 
+
+
+///////////////////////////////////////////////////////////////////////////////////
+// Print
+
+
+#ifndef ARDUINO
+
+struct Print {
+  virtual size_t write(uint8_t) = 0;
+  virtual size_t write(const uint8_t * buffer, size_t size) = 0;
+  size_t write(const char *str) {
+    if (str == NULL)
+      return 0;
+    return write((const uint8_t *)str, strlen(str));
+  }
+  void printf(const char * format, ...) {
+    va_list ap;
+    va_start(ap, format);
+    int size = vsnprintf(nullptr, 0, format, ap) + 1;
+    if (size > 0) {
+      va_end(ap);
+      va_start(ap, format);
+      char buf[size + 1];
+      auto l = vsnprintf(buf, size, format, ap);
+      write((uint8_t*)buf, l);
+    }
+    va_end(ap);
+  }
+};
+
+#endif  // ifdef ARDUINO
+
+
+
+///////////////////////////////////////////////////////////////////////////////////
+// Stream
+
+
+#ifndef ARDUINO
+
+struct Stream : public Print {
+  virtual int available() = 0;
+  virtual int read() = 0;
+  virtual int peek() = 0;
+};
+
+#endif  // ifdef ARDUINO
 
 
 
@@ -1691,5 +1743,9 @@ inline bool isGUI(VirtualKey value)
 
 } // end of namespace
 
+
+#ifndef ARDUINO
+using fabgl::Stream;
+#endif
 
 
