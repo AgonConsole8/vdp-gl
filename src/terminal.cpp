@@ -417,9 +417,14 @@ void Terminal::end()
   xTimerDelete(m_blinkTimer, portMAX_DELAY);
 
   clearSavedCursorStates();
-
+  
   vTaskDelete(m_charsConsumerTaskHandle);
+  
+  #ifdef FABGL_EMULATED
+  m_inputQueue = nullptr;
+  #else
   vQueueDelete(m_inputQueue);
+  #endif
 
   if (m_outputQueue)
     vQueueDelete(m_outputQueue);
@@ -2374,8 +2379,14 @@ void Terminal::charsConsumerTask(void * pvParameters)
 {
   Terminal * term = (Terminal*) pvParameters;
 
-  while (true)
+  while (true) {
+
+    #ifdef FABGL_EMULATED
+    taskEmuCheck();
+    #endif
+
     term->consumeInputQueue();
+  }
 }
 
 
