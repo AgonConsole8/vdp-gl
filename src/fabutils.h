@@ -209,6 +209,14 @@ void APLLCalcParams(double freq, APLLParams * params, uint8_t * a, uint8_t * b, 
 int calcI2STimingParams(int sampleRate, int * outA, int * outB, int * outN, int * outM);
 
 
+inline void taskExit()
+{
+  #ifndef FABGL_EMULATED
+  vTaskDelete(NULL);
+  #endif
+}
+
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 
