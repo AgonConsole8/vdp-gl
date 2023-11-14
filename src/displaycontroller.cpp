@@ -167,6 +167,8 @@ Sprite::Sprite()
   visible                 = true;
   isStatic                = false;
   allowDraw               = true;
+  hidden                  = false;
+  redraw                  = false;
 }
 
 
@@ -208,6 +210,7 @@ Sprite * Sprite::moveBy(int offsetX, int offsetY)
 {
   x += offsetX;
   y += offsetY;
+  redraw = true;
   return this;
 }
 
@@ -224,6 +227,7 @@ Sprite * Sprite::moveBy(int offsetX, int offsetY, int wrapAroundWidth, int wrapA
     y = - (int) getHeight();
   if (y < - (int) getHeight())
     y = wrapAroundHeight;
+  redraw = true;
   return this;
 }
 
@@ -232,6 +236,7 @@ Sprite * Sprite::moveTo(int x, int y)
 {
   this->x = x;
   this->y = y;
+  redraw = true;
   return this;
 }
 
@@ -532,17 +537,30 @@ void IRAM_ATTR BitmappedDisplayController::processPrimitives()
 
 void BitmappedDisplayController::setSprites(Sprite * sprites, int count, int spriteSize)
 {
+  // TODO verify how this gets used
+  // if we are adjusting number of sprites when already showing some
+  // we may need to hide them before changing sprites
+  // However, this approach _prevents_ that from happening
+  // as we're just accepting and copying a single pointer to sprites
+  // and the code that calls this is free to adjust its sprite list as it sees fir
+
+  // TODO excess sprites need to be hidden
+
   processPrimitives();
   primitivesExecutionWait();
   m_sprites      = sprites;
   m_spriteSize   = spriteSize;
   m_spritesCount = count;
 
-  // allocates background buffer
-  if (!isDoubleBuffered()) {
-    uint8_t * spritePtr = (uint8_t*)m_sprites;
-    for (int i = 0; i < m_spritesCount; ++i, spritePtr += m_spriteSize) {
-      Sprite * sprite = (Sprite*) spritePtr;
+  // ensure they get displayed
+  uint8_t * spritePtr = (uint8_t*)m_sprites;
+  for (int i = 0; i < m_spritesCount; ++i, spritePtr += m_spriteSize) {
+    Sprite * sprite = (Sprite*) spritePtr;
+    if (sprite->isDisplayable()) {
+      hiddenSprites[i] = sprite;
+    }
+    // allocates background buffer
+    if (!isDoubleBuffered()) {
       int reqBackBufferSize = 0;
       for (int i = 0; i < sprite->framesCount; ++i)
         reqBackBufferSize = tmax(reqBackBufferSize, sprite->frames[i]->width * getBitmapSavePixelSize() * sprite->frames[i]->height);
@@ -565,10 +583,66 @@ void BitmappedDisplayController::refreshSprites()
   addPrimitive(p);
 }
 
-
 void IRAM_ATTR BitmappedDisplayController::hideSprites(Rect & updateRect)
 {
-  if (!m_spritesHidden) {
+  // find sprites that overlap updateRect
+
+  // find all sprites that overlap with updateRect and add them to the hidden list
+  // and find all sprites that overlap with hidden sprites
+  for (int i = 0; i < spritesCount(); i++) {
+    // skip if we're already tracking this as hidden
+    if (hiddenSprites.find(i) != hiddenSprites.end()) {
+      continue;
+    }
+    Sprite * sprite = getSprite(i);
+    if (sprite->isDisplayable()) {
+      if (sprite->redraw) {
+        sprite->redraw = false;
+        hiddenSprites[i] = sprite;
+      } else {
+        Rect spriteRect(sprite->savedX, sprite->savedY, sprite->savedX + sprite->getWidth(), sprite->savedY + sprite->getHeight());
+        if (spriteRect.intersects(updateRect)) {
+          hiddenSprites[i] = sprite;
+        }
+      }
+    }
+  }
+  // iterate over sprites again to find remaining sprites that overlap with hidden sprites
+  for (int i = 0; i < spritesCount(); i++) {
+    // skip if we're already tracking this as hidden
+    if (hiddenSprites.find(i) != hiddenSprites.end()) {
+      continue;
+    }
+    Sprite * sprite = getSprite(i);
+    if (sprite->isDisplayable()) {
+      Rect spriteRect(sprite->savedX, sprite->savedY, sprite->savedX + sprite->getWidth(), sprite->savedY + sprite->getHeight());
+      for (auto spritePair : hiddenSprites) {
+        auto val = spritePair.second;
+        if (spriteRect.intersects(Rect(val->savedX, val->savedY, val->savedX + val->getFrame()->width, val->savedY + val->getFrame()->height))) {
+          hiddenSprites[i] = sprite;
+          break;
+        }
+      }
+    }
+  }
+
+  // iterate over hidden sprites and hide them, if they're not already hidden
+  for (auto spritePair : hiddenSprites) {
+    auto sprite = spritePair.second;
+    if (!sprite->hidden && sprite->savedBackground) {
+      sprite->hidden = true;
+      int savedX = sprite->savedX;
+      int savedY = sprite->savedY;
+      int savedWidth  = sprite->savedBackgroundWidth;
+      int savedHeight = sprite->savedBackgroundHeight;
+      Bitmap bitmap(savedWidth, savedHeight, sprite->savedBackground, PixelFormat::Native);
+      absDrawBitmap(savedX, savedY, &bitmap, nullptr, true);
+      // sprite->savedBackgroundWidth = sprite->savedBackgroundHeight = 0;
+    }
+  }
+
+
+  if (false && !m_spritesHidden) {
     m_spritesHidden = true;
 
     // normal sprites
@@ -608,7 +682,69 @@ void IRAM_ATTR BitmappedDisplayController::hideSprites(Rect & updateRect)
 
 void IRAM_ATTR BitmappedDisplayController::showSprites(Rect & updateRect)
 {
-  if (m_spritesHidden) {
+  // show all our hidden sprites
+  // copy backgrounds first
+  for (auto spritePair : hiddenSprites) {
+    auto sprite = spritePair.second;
+    // if (sprite->hidden && sprite->savedBackground) {
+    // if (sprite->isDisplayable()) {
+      sprite->hidden = false;
+      // save sprite X and Y so other threads can change them without interferring
+      int spriteX = sprite->x;
+      int spriteY = sprite->y;
+      Bitmap const * bitmap = sprite->getFrame();
+      int bitmapWidth  = bitmap->width;
+      int bitmapHeight = bitmap->height;
+      absCopyBitmap(spriteX, spriteY, bitmapWidth, bitmapHeight, sprite->savedBackground);
+      sprite->savedX = spriteX;
+      sprite->savedY = spriteY;
+      sprite->savedBackgroundWidth  = bitmapWidth;
+      sprite->savedBackgroundHeight = bitmapHeight;
+      // updateRect = updateRect.merge(Rect(spriteX, spriteY, spriteX + bitmapWidth - 1, spriteY + bitmapHeight - 1));
+    // }
+  }
+
+  // get array of sprites from hiddenSprites
+  // sort by Y
+  // auto sprites = std::vector<Sprite*>();
+  // sprites.reserve(hiddenSprites.size());
+  // for (auto spritePair : hiddenSprites) {
+  //   sprites.push_back(spritePair.second);
+  // }
+  // std::sort(sprites.begin(), sprites.end(), [](Sprite* a, Sprite* b) {
+  //   return a->savedY < b->savedY;
+  // });
+  // // display them
+  // for (auto sprite : sprites) {
+  //   // if (sprite->isDisplayable()) {
+  //     int spriteX = sprite->savedX;
+  //     int spriteY = sprite->savedY;
+  //     Bitmap const * bitmap = sprite->getFrame();
+  //     absDrawBitmap(spriteX, spriteY, bitmap, nullptr, true);
+  //     if (sprite->isStatic)
+  //       sprite->allowDraw = false;
+  //   // }
+  // }
+
+  // then draw the sprites
+  for (auto spritePair : hiddenSprites) {
+    auto sprite = spritePair.second;
+    // if (sprite->hidden && sprite->savedBackground) {
+    if (sprite->isDisplayable()) {
+      // sprite->hidden = false;
+      // save sprite X and Y so other threads can change them without interferring
+      int spriteX = sprite->x;
+      int spriteY = sprite->y;
+      Bitmap const * bitmap = sprite->getFrame();
+      absDrawBitmap(spriteX, spriteY, bitmap, nullptr, true);
+      if (sprite->isStatic)
+        sprite->allowDraw = false;
+    }
+  }
+
+  hiddenSprites.clear();
+
+  if (false && m_spritesHidden) {
     m_spritesHidden = false;
 
     // normal sprites
@@ -1232,6 +1368,50 @@ void IRAM_ATTR BitmappedDisplayController::absDrawBitmap(int destX, int destY, B
 
   }
 
+}
+
+
+void IRAM_ATTR BitmappedDisplayController::absCopyBitmap(int srcX, int srcY, int width, int height, void * buffer)
+{
+  const int clipX1 = 0;
+  const int clipY1 = 0;
+  const int clipX2 = paintState().absClippingRect.X2;
+  const int clipY2 = paintState().absClippingRect.Y2;
+
+  if (srcX > clipX2 || srcY > clipY2)
+    return;
+
+  int X1 = 0;
+  int XCount = width;
+
+  if (srcX < clipX1) {
+    X1 = clipX1 - srcX;
+    srcX = clipX1;
+  }
+  if (X1 >= width)
+    return;
+
+  if (srcX + XCount > clipX2 + 1)
+    XCount = clipX2 + 1 - srcX;
+  if (X1 + XCount > width)
+    XCount = width - X1;
+
+  int Y1 = 0;
+  int YCount = height;
+
+  if (srcY < clipY1) {
+    Y1 = clipY1 - srcY;
+    srcY = clipY1;
+  }
+  if (Y1 >= height)
+    return;
+
+  if (srcY + YCount > clipY2 + 1)
+    YCount = clipY2 + 1 - srcY;
+  if (Y1 + YCount > height)
+    YCount = height - Y1;
+
+  rawCopyBitmap(srcX, srcY, width, buffer, X1, Y1, XCount, YCount);
 }
 
 

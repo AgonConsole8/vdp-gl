@@ -447,6 +447,13 @@ void VGA16Controller::rawDrawBitmap_RGBA8888(int destX, int destY, Bitmap const 
                                 );
 }
 
+void VGA16Controller::rawCopyBitmap(int srcX, int srcY, int width, void * saveBuffer, int X1, int Y1, int XCount, int YCount)
+{
+  genericRawCopyBitmap(srcX, srcY, width, (uint8_t*)saveBuffer, X1, Y1, XCount, YCount,
+                       [&] (int y)                { return (uint8_t*) m_viewPort[y]; },     // rawGetRow
+                       [&] (uint8_t * row, int x) { return VGA16_GETPIXELINROW(row, x); }   // rawGetPixelInRow
+                      );
+}
 
 void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
 {

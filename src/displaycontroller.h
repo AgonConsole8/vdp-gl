@@ -38,6 +38,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -562,6 +565,10 @@ struct Sprite {
     uint8_t isStatic:  1;
     // This is always '1' for dynamic sprites and always '0' for static sprites.
     uint8_t allowDraw: 1;
+    // track hidden
+    uint8_t hidden:    1;
+    // pending redraw
+    uint8_t redraw:    1;
   };
 
   Sprite();
@@ -578,6 +585,7 @@ struct Sprite {
   Sprite * moveBy(int offsetX, int offsetY);
   Sprite * moveBy(int offsetX, int offsetY, int wrapAroundWidth, int wrapAroundHeight);
   Sprite * moveTo(int x, int y);
+  inline bool isDisplayable() { return frames && visible && allowDraw; }
 };
 
 
@@ -950,6 +958,8 @@ protected:
 
   virtual void rawDrawBitmap_RGBA8888(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount) = 0;
 
+  virtual void rawCopyBitmap(int srcX, int srcY, int width, void * saveBuffer, int X1, int Y1, int XCount, int YCount) = 0;
+
   //// implemented methods
 
   void execPrimitive(Primitive const & prim, Rect & updateRect, bool insideISR);
@@ -990,6 +1000,8 @@ protected:
 
   void absDrawBitmap(int destX, int destY, Bitmap const * bitmap, void * saveBackground, bool ignoreClippingRect);
 
+  void absCopyBitmap(int srcX, int srcY, int width, int height, void * buffer);
+
   void setDoubleBuffered(bool value);
 
   bool getPrimitive(Primitive * primitive, int timeOutMS = 0);
@@ -1019,6 +1031,10 @@ private:
   int                    m_spriteSize;    // size of sprite structure
   int                    m_spritesCount;  // number of sprites in m_sprites array
   bool                   m_spritesHidden; // true between hideSprites() and showSprites()
+
+  // have an unordered_map to keep track of sprites we are temporarily hiding
+  // when we refresh sprites we can unhide them
+  std::unordered_map<int, Sprite*> hiddenSprites;
 
   // mouse cursor (mouse pointer) support
   Sprite                 m_mouseCursor;
@@ -1690,21 +1706,28 @@ protected:
     const int xEnd  = X1 + XCount;
     auto data = (RGBA8888 const *) bitmap->data;
 
+    auto savedY = destY;
+
     if (saveBackground) {
 
       // save background and draw the bitmap
       for (int y = Y1; y < yEnd; ++y, ++destY) {
         auto dstrow = rawGetRow(destY);
         auto savePx = saveBackground + y * width + X1;
-        auto src = data + y * width + X1;
-        for (int x = X1, adestX = destX; x < xEnd; ++x, ++adestX, ++savePx, ++src) {
+        // auto src = data + y * width + X1;
+        // for (int x = X1, adestX = destX; x < xEnd; ++x, ++adestX, ++savePx, ++src) {
+        for (int x = X1, adestX = destX; x < xEnd; ++x, ++adestX, ++savePx) {
           *savePx = rawGetPixelInRow(dstrow, adestX);
-          if (src->A)
-            rawSetPixelInRow(dstrow, adestX, *src);
+        //   if (src->A)
+        //     rawSetPixelInRow(dstrow, adestX, *src);
         }
       }
 
-    } else {
+    }
+
+    destY = savedY;
+
+    // } else {
 
       // just draw the bitmap
       for (int y = Y1; y < yEnd; ++y, ++destY) {
@@ -1716,6 +1739,24 @@ protected:
         }
       }
 
+    // }
+  }
+
+
+  template <typename TRawGetRow, typename TRawGetPixelInRow, typename TBuffer>
+  void genericRawCopyBitmap(int srcX, int srcY, int width, TBuffer * saveBuffer, int X1, int Y1, int XCount, int YCount,
+                                     TRawGetRow rawGetRow, TRawGetPixelInRow rawGetPixelInRow)
+  {
+    const int yEnd  = Y1 + YCount;
+    const int xEnd  = X1 + XCount;
+
+    // save screen area to buffer
+    for (int y = Y1; y < yEnd; ++y, ++srcY) {
+      auto srcrow = rawGetRow(srcY);
+      auto savePx = saveBuffer + y * width + X1;
+      for (int x = X1, asrcX = srcX; x < xEnd; ++x, ++asrcX, ++savePx) {
+        *savePx = rawGetPixelInRow(srcrow, asrcX);
+      }
     }
   }
 
