@@ -595,36 +595,41 @@ void IRAM_ATTR BitmappedDisplayController::hideSprites(Rect & updateRect)
       continue;
     }
     Sprite * sprite = getSprite(i);
+    // TODO consider whether `isDisplayable` here is correct, or if it should go after the redraw check
     if (sprite->isDisplayable()) {
       if (sprite->redraw) {
         sprite->redraw = false;
         hiddenSprites[i] = sprite;
       } else {
-        Rect spriteRect(sprite->savedX, sprite->savedY, sprite->savedX + sprite->getWidth(), sprite->savedY + sprite->getHeight());
-        if (spriteRect.intersects(updateRect)) {
+        if (sprite->savedRect.intersects(updateRect)) {
           hiddenSprites[i] = sprite;
         }
       }
     }
   }
-  // iterate over sprites again to find remaining sprites that overlap with hidden sprites
-  for (int i = 0; i < spritesCount(); i++) {
-    // skip if we're already tracking this as hidden
-    if (hiddenSprites.find(i) != hiddenSprites.end()) {
-      continue;
-    }
-    Sprite * sprite = getSprite(i);
-    if (sprite->isDisplayable()) {
-      Rect spriteRect(sprite->savedX, sprite->savedY, sprite->savedX + sprite->getWidth(), sprite->savedY + sprite->getHeight());
-      for (auto spritePair : hiddenSprites) {
-        auto val = spritePair.second;
-        if (spriteRect.intersects(Rect(val->savedX, val->savedY, val->savedX + val->getFrame()->width, val->savedY + val->getFrame()->height))) {
-          hiddenSprites[i] = sprite;
-          break;
+
+  // iterate over sprites to find remaining sprites that overlap with hidden sprites
+  // until there are no more to find
+  auto hiddenCount = hiddenSprites.size();
+  do {
+    hiddenCount = hiddenSprites.size();
+    for (int i = 0; i < spritesCount(); i++) {
+      // skip if we're already tracking this as hidden
+      if (hiddenSprites.find(i) != hiddenSprites.end()) {
+        continue;
+      }
+      Sprite * sprite = getSprite(i);
+      if (sprite->isDisplayable()) {
+        for (auto spritePair : hiddenSprites) {
+          auto val = spritePair.second;
+          if (sprite->savedRect.intersects(val->savedRect)) {
+            hiddenSprites[i] = sprite;
+            break;
+          }
         }
       }
     }
-  }
+  } while (hiddenCount != hiddenSprites.size());
 
   // iterate over hidden sprites and hide them, if they're not already hidden
   for (auto spritePair : hiddenSprites) {
@@ -682,8 +687,14 @@ void IRAM_ATTR BitmappedDisplayController::hideSprites(Rect & updateRect)
 
 void IRAM_ATTR BitmappedDisplayController::showSprites(Rect & updateRect)
 {
+  // smarter routine for showing sprites should
+  // gradually copy to saved backgrounds
+  // whilst simultaneously gradually drawing when possible
+  // i.e. when sprite doesn't overlap with another sprite whose background has not yet been copied
+
   // show all our hidden sprites
-  // copy backgrounds first
+  // copy backgrounds first, whilst making a sorted list for display
+  std::multimap<int, Sprite*> sortedSprites;
   for (auto spritePair : hiddenSprites) {
     auto sprite = spritePair.second;
     // if (sprite->hidden && sprite->savedBackground) {
@@ -696,11 +707,27 @@ void IRAM_ATTR BitmappedDisplayController::showSprites(Rect & updateRect)
       int bitmapWidth  = bitmap->width;
       int bitmapHeight = bitmap->height;
       absCopyBitmap(spriteX, spriteY, bitmapWidth, bitmapHeight, sprite->savedBackground);
+      sprite->savedRect =  Rect(spriteX, spriteY, spriteX + bitmapWidth, spriteY + bitmapHeight);
       sprite->savedX = spriteX;
       sprite->savedY = spriteY;
       sprite->savedBackgroundWidth  = bitmapWidth;
       sprite->savedBackgroundHeight = bitmapHeight;
+      if (sprite->isDisplayable()) {
+        sortedSprites.insert(std::pair<int, Sprite*>((sprite->savedY * 2048) + sprite->savedX, sprite));
+      }
       // updateRect = updateRect.merge(Rect(spriteX, spriteY, spriteX + bitmapWidth - 1, spriteY + bitmapHeight - 1));
+    // }
+  }
+
+  for (auto spritePair : sortedSprites) {
+    auto sprite = spritePair.second;
+    // if (sprite->isDisplayable()) {
+      int spriteX = sprite->savedX;
+      int spriteY = sprite->savedY;
+      Bitmap const * bitmap = sprite->getFrame();
+      absDrawBitmap(spriteX, spriteY, bitmap, nullptr, true);
+      if (sprite->isStatic)
+        sprite->allowDraw = false;
     // }
   }
 
@@ -727,20 +754,20 @@ void IRAM_ATTR BitmappedDisplayController::showSprites(Rect & updateRect)
   // }
 
   // then draw the sprites
-  for (auto spritePair : hiddenSprites) {
-    auto sprite = spritePair.second;
-    // if (sprite->hidden && sprite->savedBackground) {
-    if (sprite->isDisplayable()) {
-      // sprite->hidden = false;
-      // save sprite X and Y so other threads can change them without interferring
-      int spriteX = sprite->x;
-      int spriteY = sprite->y;
-      Bitmap const * bitmap = sprite->getFrame();
-      absDrawBitmap(spriteX, spriteY, bitmap, nullptr, true);
-      if (sprite->isStatic)
-        sprite->allowDraw = false;
-    }
-  }
+  // for (auto spritePair : hiddenSprites) {
+  //   auto sprite = spritePair.second;
+  //   // if (sprite->hidden && sprite->savedBackground) {
+  //   if (sprite->isDisplayable()) {
+  //     // sprite->hidden = false;
+  //     // save sprite X and Y so other threads can change them without interferring
+  //     int spriteX = sprite->x;
+  //     int spriteY = sprite->y;
+  //     Bitmap const * bitmap = sprite->getFrame();
+  //     absDrawBitmap(spriteX, spriteY, bitmap, nullptr, true);
+  //     if (sprite->isStatic)
+  //       sprite->allowDraw = false;
+  //   }
+  // }
 
   hiddenSprites.clear();
 

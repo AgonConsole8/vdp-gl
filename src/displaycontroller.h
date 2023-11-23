@@ -39,6 +39,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <unordered_map>
+#include <map>
 #include <vector>
 #include <algorithm>
 
@@ -552,6 +553,7 @@ struct Sprite {
   Bitmap * *         frames;  // array of pointer to Bitmap
   int16_t            framesCount;
   int16_t            currentFrame;
+  Rect               savedRect;
   int16_t            savedX;
   int16_t            savedY;
   int16_t            savedBackgroundWidth;
@@ -575,8 +577,8 @@ struct Sprite {
   ~Sprite();
   Bitmap * getFrame() { return frames ? frames[currentFrame] : nullptr; }
   int getFrameIndex() { return currentFrame; }
-  void nextFrame() { ++currentFrame; if (currentFrame >= framesCount) currentFrame = 0; }
-  Sprite * setFrame(int frame) { currentFrame = frame; return this; }
+  void nextFrame() { currentFrame = (currentFrame  < framesCount - 1) ? currentFrame + 1 : 0; redraw = true; }
+  Sprite * setFrame(int frame) { currentFrame = frame; redraw = true; return this; }
   Sprite * addBitmap(Bitmap * bitmap);
   Sprite * addBitmap(Bitmap * bitmap[], int count);
   void clearBitmaps();
@@ -585,6 +587,7 @@ struct Sprite {
   Sprite * moveBy(int offsetX, int offsetY);
   Sprite * moveBy(int offsetX, int offsetY, int wrapAroundWidth, int wrapAroundHeight);
   Sprite * moveTo(int x, int y);
+  // TODO this method may be too crude for some places it is used, such as in hideSprites
   inline bool isDisplayable() { return frames && visible && allowDraw; }
 };
 
