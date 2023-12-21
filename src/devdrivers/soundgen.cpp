@@ -687,8 +687,10 @@ void SoundGenerator::attach(WaveformGenerator * value)
 
   value->setSampleRate(m_sampleRate);
 
+  m_mutex.lock();
   value->next = m_channels;
   m_channels = value;
+  m_mutex.unlock();
 
   play(isPlaying);
 }
@@ -700,7 +702,9 @@ void SoundGenerator::detach(WaveformGenerator * value)
     return;
 
   bool isPlaying = play(false);
+  m_mutex.lock();
   detachNoSuspend(value);
+  m_mutex.unlock();
   play(isPlaying);
 }
 
@@ -723,25 +727,29 @@ void SoundGenerator::detachNoSuspend(WaveformGenerator * value)
 
 int IRAM_ATTR SoundGenerator::getSample()
 {
-  int sample = 0, tvol = 0;
-  for (auto g = m_channels; g; ) {
-    if (g->enabled()) {
-      sample += g->getSample();
-      tvol += g->volume();
-    } else if (g->duration() == 0 && g->autoDetach()) {
-      auto curr = g;
-      g = g->next;  // setup next item before detaching this one
-      detachNoSuspend(curr);
-      continue; // bypass "g = g->next;"
+  if (m_mutex.try_lock()) {
+    int sample = 0, tvol = 0;
+    for (auto g = m_channels; g; ) {
+      if (g->enabled()) {
+        sample += g->getSample();
+        tvol += g->volume();
+      } else if (g->duration() == 0 && g->autoDetach()) {
+        auto curr = g;
+        g = g->next;  // setup next item before detaching this one
+        detachNoSuspend(curr);
+        continue; // bypass "g = g->next;"
+      }
+      g = g->next;
     }
-    g = g->next;
-  }
 
-  int avol = tvol ? imin(127, 127 * 127 / tvol) : 127;
-  sample = sample * avol / 127;
-  sample = sample * volume() / 127;
+    int avol = tvol ? imin(127, 127 * 127 / tvol) : 127;
+    sample = sample * avol / 127;
+    sample = sample * volume() / 127;
+    m_mutex.unlock();
+    return sample;
+  }
   
-  return sample;
+  return 0;
 }
 
 

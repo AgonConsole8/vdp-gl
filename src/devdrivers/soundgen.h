@@ -35,6 +35,7 @@
 
 
 
+#include <mutex>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -524,7 +525,9 @@ private:
   bool                m_initDone;
   
   esp_timer_handle_t  m_timerHandle;
-  
+
+  std::mutex          m_mutex;
+
   #ifdef FABGL_EMULATED
   SDL_AudioDeviceID   m_device;
   #endif
