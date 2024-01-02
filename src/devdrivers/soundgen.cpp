@@ -683,11 +683,11 @@ SamplesGenerator * SoundGenerator::playSamples(int8_t const * data, int length, 
 // does NOT take ownership of the waveform generator
 void SoundGenerator::attach(WaveformGenerator * value)
 {
+  m_mutex.lock();
   bool isPlaying = play(false);
 
   value->setSampleRate(m_sampleRate);
 
-  m_mutex.lock();
   value->next = m_channels;
   m_channels = value;
   m_mutex.unlock();
@@ -701,8 +701,8 @@ void SoundGenerator::detach(WaveformGenerator * value)
   if (!value)
     return;
 
-  bool isPlaying = play(false);
   m_mutex.lock();
+  bool isPlaying = play(false);
   detachNoSuspend(value);
   m_mutex.unlock();
   play(isPlaying);
