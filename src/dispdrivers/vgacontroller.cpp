@@ -740,4 +740,17 @@ void IRAM_ATTR VGAController::rawCopyToBitmap(int srcX, int srcY, int width, voi
 }
 
 
+void VGAController::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix)
+{
+  auto paintMode = paintState().paintOptions.mode;
+  auto setRowPixel = setRowPixelLambda(paintMode);
+
+  genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
+                                          [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                          // [&] (uint8_t * row, int x) { return VGA_PIXELINROW(row, x); },    // rawGetPixelInRow
+                                          [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, src); }  // rawSetPixelInRow
+                                         );
+}
+
+
 } // end of namespace

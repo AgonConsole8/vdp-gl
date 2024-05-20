@@ -813,6 +813,18 @@ public:
   void copyToBitmap(int X, int Y, Bitmap const * bitmap);
 
   /**
+   * @brief Draws a bitmap at specified position using a transform.
+   *
+   * Bitmap will be plotted using the specified 3x3 matrix transform.
+   * Note that the transform matrix must include a translation to the desired position.
+   * On-screen position is drawn relative to currently defined origin.
+   *
+   * @param bitmap Pointer to bitmap structure.
+   * @param transform 3x3 matrix to apply to the bitmap.
+   */
+  void drawTransformedBitmap(Bitmap const * bitmap, float const transform[9]);
+
+  /**
    * @brief Draws a sequence of lines.
    *
    * @param points A pointer to an array of Point objects. Points array is copied to a temporary buffer.

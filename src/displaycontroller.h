@@ -41,6 +41,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include <mat.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -176,6 +178,10 @@ enum PrimitiveCmd : uint8_t {
   // Copy a bitmap
   // params: bitmapDrawingInfo
   CopyToBitmap,
+
+  // Draw a transformed bitmap
+  // params: bitmapTransformedDrawingInfo
+  DrawTransformedBitmap,
 
   // Refresh sprites
   // no params
@@ -529,6 +535,17 @@ struct BitmapDrawingInfo {
   BitmapDrawingInfo(int X_, int Y_, Bitmap const * bitmap_) : X(X_), Y(Y_), bitmap(bitmap_) { }
 } __attribute__ ((packed));
 
+struct BitmapTransformedDrawingInfo {
+  Bitmap const * bitmap;
+  float transformMatrix[9];
+
+  BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const transformMatrix_[9]) : bitmap(bitmap_) {
+    for (int i = 0; i < 9; i++) {
+      transformMatrix[i] = transformMatrix_[i];
+    }
+  }
+} __attribute__ ((packed));;
+
 
 /** \ingroup Enumerations
  * @brief This enum defines a set of predefined mouse cursors.
@@ -685,6 +702,7 @@ struct Primitive {
     PaintOptions           paintOptions;
     GlyphsBufferRenderInfo glyphsBufferRenderInfo;
     BitmapDrawingInfo      bitmapDrawingInfo;
+    BitmapTransformedDrawingInfo bitmapTransformedDrawingInfo;
     Path                   path;
     PixelDesc              pixelDesc;
     LineEnds               lineEnds;
@@ -1030,6 +1048,14 @@ protected:
 
   virtual void rawCopyToBitmap(int srcX, int srcY, int width, void * saveBuffer, int X1, int Y1, int XCount, int YCount) = 0;
 
+  // virtual void rawDrawBitmapWithMatrix_Native(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+
+  // virtual void rawDrawBitmapWithMatrix_Mask(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+  
+  virtual void rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+  
+  // virtual void rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+
   //// implemented methods
 
   void execPrimitive(Primitive const & prim, Rect & updateRect, bool insideISR);
@@ -1073,6 +1099,8 @@ protected:
   void copyToBitmap(BitmapDrawingInfo const & bitmapCopyingInfo);
 
   void absCopyToBitmap(int srcX, int srcY, Bitmap const * bitmap);
+
+  void drawBitmapWithTransform(BitmapTransformedDrawingInfo const & drawingInfo, Rect & updateRect);
 
   void setDoubleBuffered(bool value);
 
@@ -2310,6 +2338,39 @@ protected:
         *savePx = rawGetPixelInRow(srcrow, asrcX);
       }
     }
+  }
+
+
+  template <typename TRawGetRow, /*typename TRawGetPixelInRow,*/ typename TRawSetPixelInRow /*, typename TBackground */>
+  void genericRawDrawTransformedBitmap_RGBA2222(int originX, int originY, Rect drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix,
+                                     TRawGetRow rawGetRow, /* TRawGetPixelInRow rawGetPixelInRow, */ TRawSetPixelInRow rawSetPixelInRow)
+  {
+    // transformed bitmap plot works as follows:
+    // 1. for each pixel in the destination rectangle, calculate the corresponding pixel in the source bitmap
+    // 2. if the source pixel is within source, and is not transparent, plot it to the destination
+    //
+    // drawingRect should be all on-screen, pre-clipped, but moved to -originX, -originY
+    float pos[3] = {0.0f, 0.0f, 1.0f};
+  	auto posMatrix = dspm::Mat((float *)&pos, 3, 1);
+    float maxX = drawingRect.X2;
+    float maxY = drawingRect.Y2;
+ 
+    for (float y = drawingRect.Y1; y < maxY; y++) {
+      for (float x = drawingRect.X1; x < maxX; x++) {
+        // calculate the source pixel
+        posMatrix(0, 0) = x;
+        posMatrix(1, 0) = y;
+        auto transformed = invMatrix * posMatrix;
+        int srcXint = (int) transformed(0, 0);
+        int srcYint = (int) transformed(1, 0);
+        if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
+          auto src = bitmap->data + srcYint * bitmap->width + srcXint;
+          if (*src & 0xc0)  // alpha > 0 ?
+            rawSetPixelInRow(rawGetRow((int)y + originY), (int)x + originX, *src);
+        }
+      }
+    }
+
   }
 
 

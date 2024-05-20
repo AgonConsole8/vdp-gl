@@ -598,6 +598,15 @@ void Canvas::copyToBitmap(int srcX, int srcY, Bitmap const * bitmap)
 }
 
 
+void Canvas::drawTransformedBitmap(Bitmap const * bitmap, float const transform[9])
+{
+  Primitive p;
+  p.cmd               = PrimitiveCmd::DrawTransformedBitmap;
+  p.bitmapTransformedDrawingInfo = BitmapTransformedDrawingInfo(bitmap, transform);
+  m_displayController->addPrimitive(p);
+}
+
+
 void Canvas::swapBuffers()
 {
   Primitive p;

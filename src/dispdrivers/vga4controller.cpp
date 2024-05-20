@@ -659,6 +659,19 @@ void VGA4Controller::rawCopyToBitmap(int srcX, int srcY, int width, void * saveB
 }
 
 
+void VGA4Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix)
+{
+  auto paintMode = paintState().paintOptions.mode;
+  auto setRowPixel = setRowPixelLambda(paintMode);
+
+  genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
+                                          [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                          // VGA4_GETPIXELINROW
+                                          [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, RGB2222toPaletteIndex(src)); }  // rawSetPixelInRow
+                                         );
+}
+
+
 void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
 {
   #if FABGLIB_VGAXCONTROLLER_PERFORMANCE_CHECK

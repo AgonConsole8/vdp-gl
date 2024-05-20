@@ -607,6 +607,19 @@ void VGA8Controller::rawCopyToBitmap(int srcX, int srcY, int width, void * saveB
 }
 
 
+void VGA8Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix)
+{
+  auto paintMode = paintState().paintOptions.mode;
+  auto setRowPixel = setRowPixelLambda(paintMode);
+
+  genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
+                                          [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                          // VGA8_GETPIXELINROW
+                                          [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, RGB2222toPaletteIndex(src)); }  // rawSetPixelInRow
+                                         );
+}
+
+
 void VGA8Controller::directSetPixel(int x, int y, int value)
 {
   VGA8_SETPIXEL(x, y, value);

@@ -797,6 +797,9 @@ void IRAM_ATTR BitmappedDisplayController::execPrimitive(Primitive const & prim,
     case PrimitiveCmd::CopyToBitmap:
       copyToBitmap(prim.bitmapDrawingInfo);
       break;
+    case PrimitiveCmd::DrawTransformedBitmap:
+      drawBitmapWithTransform(prim.bitmapTransformedDrawingInfo, updateRect);
+      break;
     case PrimitiveCmd::RefreshSprites:
       hideSprites(updateRect);
       showSprites(updateRect);
@@ -1321,6 +1324,102 @@ void IRAM_ATTR BitmappedDisplayController::absCopyToBitmap(int srcX, int srcY, B
     YCount = height - Y1;
 
   rawCopyToBitmap(srcX, srcY, width, bitmap->data, X1, Y1, XCount, YCount);
+}
+
+
+void BitmappedDisplayController::drawBitmapWithTransform(BitmapTransformedDrawingInfo const & drawingInfo, Rect & updateRect)
+{
+  // work out corners of the bitmap by taking the corners of the bitmap and transforming them by the matrix
+  int x = paintState().origin.X;
+  int y = paintState().origin.Y;
+  int width = drawingInfo.bitmap->width - 1;
+  int height = drawingInfo.bitmap->height - 1;
+
+  Rect originalBox = Rect(0, 0, width, height);
+
+  auto matrix = dspm::Mat((float *)&drawingInfo.transformMatrix, 3, 3);
+
+  float pos[3] = { (float)originalBox.X1, (float)originalBox.Y1, 1.0f };
+  auto posMatrix = dspm::Mat((float *)&pos, 3, 1);
+
+  // work out each corner's new position
+  Point corners[4];
+  auto transformed = matrix * posMatrix;
+  corners[0] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  pos[0] = (float)originalBox.X2;
+  transformed = matrix * posMatrix;
+  corners[1] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  pos[0] = (float)originalBox.X1;
+  pos[1] = (float)originalBox.Y2;
+  transformed = matrix * posMatrix;
+  corners[2] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  pos[0] = (float)originalBox.X2;
+  transformed = matrix * posMatrix;
+  corners[3] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+
+  // work out the new bounding box
+  // which needs to take the smallest X and Y and the largest X and Y from transformed corners
+  int minX = corners[0].X;
+  int minY = corners[0].Y;
+  int maxX = corners[0].X;
+  int maxY = corners[0].Y;
+  for (int i = 1; i < 4; ++i) {
+    if (corners[i].X < minX)
+      minX = corners[i].X;
+    if (corners[i].Y < minY)
+      minY = corners[i].Y;
+    if (corners[i].X > maxX)
+      maxX = corners[i].X;
+    if (corners[i].Y > maxY)
+      maxY = corners[i].Y;
+  }
+
+  Rect transformedBox = Rect(minX, minY, maxX, maxY);
+
+  // transformed box at this point is the bounding box _without_ taking into account origin
+  // drawingRect gets translated, and then clipped to the current clipping rect
+  Rect drawingRect = transformedBox.translate(x, y).intersection(paintState().absClippingRect);
+
+  if (drawingRect.width() == 0 || drawingRect.height() == 0) {
+    // no area within our current clipping rect to draw
+    return;
+  }
+
+  updateRect = updateRect.merge(drawingRect);
+  hideSprites(updateRect);
+
+  // get inverted matrix
+  auto invMatrix = matrix.inverse();
+
+  // translate our drawing rect _back_ to the origin
+  drawingRect = drawingRect.translate(-x, -y);
+
+  // drawingRect is now the translated area of the bitmap that we want to draw
+  // using an inverted matrix, we can work out the original pixels in the bitmap to draw on-screen
+
+  // Draw the bitmap
+  switch (drawingInfo.bitmap->format) {
+
+    case PixelFormat::Undefined:
+      break;
+
+    // case PixelFormat::Native:
+    //   rawDrawBitmapWithMatrix_Native(x, y, drawingRect, drawingInfo.bitmap, invMatrix);
+    //   break;
+
+    // case PixelFormat::Mask:
+    //   rawDrawBitmapWithMatrix_Mask(x, y, drawingRect, drawingInfo.bitmap, invMatrix);
+    //   break;
+
+    case PixelFormat::RGBA2222:
+      rawDrawBitmapWithMatrix_RGBA2222(x, y, drawingRect, drawingInfo.bitmap, invMatrix);
+      break;
+
+    // case PixelFormat::RGBA8888:
+    //   rawDrawBitmapWithMatrix_RGBA8888(x, y, drawingRect, drawingInfo.bitmap, invMatrix);
+    //   break;
+
+  }
 }
 
 
