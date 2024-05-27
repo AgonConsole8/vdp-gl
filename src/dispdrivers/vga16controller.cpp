@@ -647,7 +647,7 @@ void VGA16Controller::rawCopyToBitmap(int srcX, int srcY, int width, void * save
 }
 
 
-void VGA16Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix)
+void VGA16Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);

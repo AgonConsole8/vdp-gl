@@ -602,7 +602,18 @@ void Canvas::drawTransformedBitmap(Bitmap const * bitmap, float const transform[
 {
   Primitive p;
   p.cmd               = PrimitiveCmd::DrawTransformedBitmap;
-  p.bitmapTransformedDrawingInfo = BitmapTransformedDrawingInfo(bitmap, transform);
+  auto matrix = dspm::Mat(3, 3);
+  matrix(0, 0) = transform[0];
+  matrix(0, 1) = transform[1];
+  matrix(0, 2) = transform[2];
+  matrix(1, 0) = transform[3];
+  matrix(1, 1) = transform[4];
+  matrix(1, 2) = transform[5];
+  matrix(2, 0) = 0.0f;
+  matrix(2, 1) = 0.0f;
+  matrix(2, 2) = 1.0f;
+  dspm::Mat invMatrix = matrix.inverse();
+  p.bitmapTransformedDrawingInfo = BitmapTransformedDrawingInfo(bitmap, transform, invMatrix.data);
   m_displayController->addPrimitive(p);
 }
 

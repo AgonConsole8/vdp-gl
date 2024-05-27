@@ -40,8 +40,10 @@
 #include <vector>
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #include <mat.h>
+#include <dspm_mult.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -537,13 +539,35 @@ struct BitmapDrawingInfo {
 
 struct BitmapTransformedDrawingInfo {
   Bitmap const * bitmap;
-  float transformMatrix[9];
+  // float transformA;
+  // float transformB;
+  // float transformC;
+  // float transformD;
+  // float transformE;
+  // float transformF;
+  // float transformMatrix[9];
+  float const * transformMatrix;
+  float const * transformInverse;
+  bool          freeMatrix;
 
-  BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const transformMatrix_[9]) : bitmap(bitmap_) {
-    for (int i = 0; i < 9; i++) {
-      transformMatrix[i] = transformMatrix_[i];
-    }
-  }
+  BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const * transformMatrix_, float const * transformInverse_) : 
+  bitmap(bitmap_), transformMatrix(transformMatrix_), transformInverse(transformInverse_), freeMatrix(false) {  }
+
+  // // BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const transformMatrix_[9]) : bitmap(bitmap_) {
+  // BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const * transformMatrix_) : bitmap(bitmap_) {
+  //   // transformA = transformMatrix_[0];
+  //   // transformB = transformMatrix_[1];
+  //   // transformC = transformMatrix_[2];
+  //   // transformD = transformMatrix_[3];
+  //   // transformE = transformMatrix_[4];
+  //   // transformF = transformMatrix_[5];
+  //   transformMatrix = transformMatrix_;
+
+  //   // for (int i = 0; i < 9; i++) {
+  //   //   transformMatrix[i] = transformMatrix_[i];
+  //   // }
+  //   freeMatrix = false;
+  // }
 } __attribute__ ((packed));;
 
 
@@ -1052,7 +1076,7 @@ protected:
 
   // virtual void rawDrawBitmapWithMatrix_Mask(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
   
-  virtual void rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+  virtual void rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
   
   // virtual void rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
 
@@ -2342,7 +2366,7 @@ protected:
 
 
   template <typename TRawGetRow, /*typename TRawGetPixelInRow,*/ typename TRawSetPixelInRow /*, typename TBackground */>
-  void genericRawDrawTransformedBitmap_RGBA2222(int originX, int originY, Rect drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix,
+  void genericRawDrawTransformedBitmap_RGBA2222(int originX, int originY, Rect drawingRect, Bitmap const * bitmap, const float * invMatrix,
                                      TRawGetRow rawGetRow, /* TRawGetPixelInRow rawGetPixelInRow, */ TRawSetPixelInRow rawSetPixelInRow)
   {
     // transformed bitmap plot works as follows:
@@ -2351,18 +2375,28 @@ protected:
     //
     // drawingRect should be all on-screen, pre-clipped, but moved to -originX, -originY
     float pos[3] = {0.0f, 0.0f, 1.0f};
-  	auto posMatrix = dspm::Mat((float *)&pos, 3, 1);
+    float srcPos[3] = {0.0f, 0.0f, 1.0f};
+  	// auto posMatrix = dspm::Mat((float *)&pos, 3, 1);
+  	// auto posMatrix = dspm::Mat(3, 1);
+    // posMatrix(2, 0) = 1.0f;
     float maxX = drawingRect.X2;
     float maxY = drawingRect.Y2;
+    // float maxY = 122.0f;
  
-    for (float y = drawingRect.Y1; y < maxY; y++) {
-      for (float x = drawingRect.X1; x < maxX; x++) {
+    for (float y = drawingRect.Y1; y <= maxY; y++) {
+      for (float x = drawingRect.X1; x <= maxX; x++) {
         // calculate the source pixel
-        posMatrix(0, 0) = x;
-        posMatrix(1, 0) = y;
-        auto transformed = invMatrix * posMatrix;
-        int srcXint = (int) transformed(0, 0);
-        int srcYint = (int) transformed(1, 0);
+        pos[0] = x;
+        pos[1] = y;
+        // posMatrix(0, 0) = x;
+        // posMatrix(1, 0) = y;
+        // auto transformed = invMatrix * posMatrix;
+        dspm_mult_f32(invMatrix, pos, srcPos, 3, 3, 1);
+        
+        // int srcXint = (int) transformed(0, 0);
+        // int srcYint = (int) transformed(1, 0);
+        int srcXint = (int) (srcPos[0] - 0.5f);
+        int srcYint = (int) (srcPos[1] - 0.5f);
         if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
           auto src = bitmap->data + srcYint * bitmap->width + srcXint;
           if (*src & 0xc0)  // alpha > 0 ?

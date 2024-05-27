@@ -740,7 +740,7 @@ void IRAM_ATTR VGAController::rawCopyToBitmap(int srcX, int srcY, int width, voi
 }
 
 
-void VGAController::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix)
+void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);

@@ -464,6 +464,23 @@ void BitmappedDisplayController::primitiveReplaceDynamicBuffers(Primitive & prim
       }
       break;
     }
+    case PrimitiveCmd::DrawTransformedBitmap:
+    {
+      int sz = sizeof(float) * 9;
+      void * newbuf = nullptr;
+      // wait until we have enough free space
+      while ((newbuf = m_primDynMemPool.alloc(sz)) == nullptr)
+        taskYIELD();
+      memcpy(newbuf, primitive.bitmapTransformedDrawingInfo.transformMatrix, sz);
+      primitive.bitmapTransformedDrawingInfo.transformMatrix = (float*)newbuf;
+      // copy the inv matrix too
+      while ((newbuf = m_primDynMemPool.alloc(sz)) == nullptr)
+        taskYIELD();
+      memcpy(newbuf, primitive.bitmapTransformedDrawingInfo.transformInverse, sz);
+      primitive.bitmapTransformedDrawingInfo.transformInverse = (float*)newbuf;
+      primitive.bitmapTransformedDrawingInfo.freeMatrix = true;
+      break;
+    }
 
     default:
       break;
@@ -1327,52 +1344,100 @@ void IRAM_ATTR BitmappedDisplayController::absCopyToBitmap(int srcX, int srcY, B
 }
 
 
-void BitmappedDisplayController::drawBitmapWithTransform(BitmapTransformedDrawingInfo const & drawingInfo, Rect & updateRect)
+void IRAM_ATTR BitmappedDisplayController::drawBitmapWithTransform(BitmapTransformedDrawingInfo const & drawingInfo, Rect & updateRect)
 {
   // work out corners of the bitmap by taking the corners of the bitmap and transforming them by the matrix
   int x = paintState().origin.X;
   int y = paintState().origin.Y;
-  int width = drawingInfo.bitmap->width - 1;
-  int height = drawingInfo.bitmap->height - 1;
+  int width = drawingInfo.bitmap->width;
+  int height = drawingInfo.bitmap->height;
 
   Rect originalBox = Rect(0, 0, width, height);
+  // float transformMatrix[9] = {
+  //   drawingInfo.transformA, drawingInfo.transformB, drawingInfo.transformC,
+  //   drawingInfo.transformD, drawingInfo.transformE, drawingInfo.transformF,
+  //   0.0f, 0.0f, 1.0f
+  // };
+  auto transformMatrix = drawingInfo.transformMatrix;
 
-  auto matrix = dspm::Mat((float *)&drawingInfo.transformMatrix, 3, 3);
+  // auto matrix = dspm::Mat((float *)&drawingInfo.transformMatrix, 3, 3);
 
   float pos[3] = { (float)originalBox.X1, (float)originalBox.Y1, 1.0f };
-  auto posMatrix = dspm::Mat((float *)&pos, 3, 1);
+  // auto posMatrix = dspm::Mat((float *)&pos, 3, 1);
+  // auto posMatrix = dspm::Mat(3, 1);
+  // posMatrix(0, 0) = (float)originalBox.X1;
+  // posMatrix(1, 0) = (float)originalBox.Y1;
+  // posMatrix(2, 0) = 1.0f;
 
   // work out each corner's new position
-  Point corners[4];
-  auto transformed = matrix * posMatrix;
-  corners[0] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // TODO no need to create corners array here, just directly work out minX, minY, maxX, maxY
+  // Point corners[4];
+  int minX = INT_MAX;
+  int minY = INT_MAX;
+  int maxX = INT_MIN;
+  int maxY = INT_MIN;
+  float transformed[3];
+  // dspm_mult_f32(drawingInfo.transformMatrix, pos, transformed, 3, 3, 1);
+  dspm_mult_f32(transformMatrix, pos, transformed, 3, 3, 1);
+  // auto transformed = matrix * posMatrix;
+  // corners[0] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // corners[0] = Point((int)transformed[0], (int)transformed[1]);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
+  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
   pos[0] = (float)originalBox.X2;
-  transformed = matrix * posMatrix;
-  corners[1] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // posMatrix(0, 0) = (float)originalBox.X2;
+  // transformed = matrix * posMatrix;
+  // corners[1] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // dspm_mult_f32(drawingInfo.transformMatrix, pos, transformed, 3, 3, 1);
+  dspm_mult_f32(transformMatrix, pos, transformed, 3, 3, 1);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
+  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
+  // corners[1] = Point((int)transformed[0], (int)transformed[1]);
   pos[0] = (float)originalBox.X1;
   pos[1] = (float)originalBox.Y2;
-  transformed = matrix * posMatrix;
-  corners[2] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // posMatrix(0, 0) = (float)originalBox.X1;
+  // posMatrix(1, 0) = (float)originalBox.Y2;
+  // transformed = matrix * posMatrix;
+  // dspm_mult_f32(drawingInfo.transformMatrix, pos, transformed, 3, 3, 1);
+  dspm_mult_f32(transformMatrix, pos, transformed, 3, 3, 1);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
+  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
+  // corners[2] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // corners[2] = Point((int)transformed[0], (int)transformed[1]);
   pos[0] = (float)originalBox.X2;
-  transformed = matrix * posMatrix;
-  corners[3] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // posMatrix(0, 0) = (float)originalBox.X2;
+  // transformed = matrix * posMatrix;
+  // dspm_mult_f32(drawingInfo.transformMatrix, pos, transformed, 3, 3, 1);
+  dspm_mult_f32(transformMatrix, pos, transformed, 3, 3, 1);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
+  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
+  // corners[3] = Point((int)transformed(0, 0), (int)transformed(1, 0));
+  // corners[3] = Point((int)transformed[0], (int)transformed[1]);
 
   // work out the new bounding box
   // which needs to take the smallest X and Y and the largest X and Y from transformed corners
-  int minX = corners[0].X;
-  int minY = corners[0].Y;
-  int maxX = corners[0].X;
-  int maxY = corners[0].Y;
-  for (int i = 1; i < 4; ++i) {
-    if (corners[i].X < minX)
-      minX = corners[i].X;
-    if (corners[i].Y < minY)
-      minY = corners[i].Y;
-    if (corners[i].X > maxX)
-      maxX = corners[i].X;
-    if (corners[i].Y > maxY)
-      maxY = corners[i].Y;
-  }
+  // int minX = corners[0].X;
+  // int minY = corners[0].Y;
+  // int maxX = corners[0].X;
+  // int maxY = corners[0].Y;
+  // for (int i = 1; i < 4; ++i) {
+  //   if (corners[i].X < minX)
+  //     minX = corners[i].X;
+  //   if (corners[i].Y < minY)
+  //     minY = corners[i].Y;
+  //   if (corners[i].X > maxX)
+  //     maxX = corners[i].X;
+  //   if (corners[i].Y > maxY)
+  //     maxY = corners[i].Y;
+  // }
 
   Rect transformedBox = Rect(minX, minY, maxX, maxY);
 
@@ -1389,10 +1454,26 @@ void BitmappedDisplayController::drawBitmapWithTransform(BitmapTransformedDrawin
   hideSprites(updateRect);
 
   // get inverted matrix
-  auto invMatrix = matrix.inverse();
+  // auto matrix = dspm::Mat(3, 3);
+  // matrix(0, 0) = drawingInfo.transformMatrix[0];
+  // matrix(0, 1) = drawingInfo.transformMatrix[1];
+  // matrix(0, 2) = drawingInfo.transformMatrix[2];
+  // matrix(1, 0) = drawingInfo.transformMatrix[3];
+  // matrix(1, 1) = drawingInfo.transformMatrix[4];
+  // matrix(1, 2) = drawingInfo.transformMatrix[5];
+  // // matrix(0, 0) = drawingInfo.transformA;
+  // // matrix(0, 1) = drawingInfo.transformB;
+  // // matrix(0, 2) = drawingInfo.transformC;
+  // // matrix(1, 0) = drawingInfo.transformD;
+  // // matrix(1, 1) = drawingInfo.transformE;
+  // // matrix(1, 2) = drawingInfo.transformF;
+  // matrix(2, 0) = 0.0f;
+  // matrix(2, 1) = 0.0f;
+  // matrix(2, 2) = 1.0f;
+  // dspm::Mat invMatrix = matrix.inverse();
 
   // translate our drawing rect _back_ to the origin
-  drawingRect = drawingRect.translate(-x, -y);
+  // drawingRect = drawingRect.translate(-x, -y);
 
   // drawingRect is now the translated area of the bitmap that we want to draw
   // using an inverted matrix, we can work out the original pixels in the bitmap to draw on-screen
@@ -1412,13 +1493,19 @@ void BitmappedDisplayController::drawBitmapWithTransform(BitmapTransformedDrawin
     //   break;
 
     case PixelFormat::RGBA2222:
-      rawDrawBitmapWithMatrix_RGBA2222(x, y, drawingRect, drawingInfo.bitmap, invMatrix);
+      // rawDrawBitmapWithMatrix_RGBA2222(x, y, drawingRect, drawingInfo.bitmap, invMatrix.data);
+      rawDrawBitmapWithMatrix_RGBA2222(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
       break;
 
     // case PixelFormat::RGBA8888:
     //   rawDrawBitmapWithMatrix_RGBA8888(x, y, drawingRect, drawingInfo.bitmap, invMatrix);
     //   break;
 
+  }
+
+  if (drawingInfo.freeMatrix) {
+    m_primDynMemPool.free((void*)drawingInfo.transformMatrix);
+    m_primDynMemPool.free((void*)drawingInfo.transformInverse);
   }
 }
 
