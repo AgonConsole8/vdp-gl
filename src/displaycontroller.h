@@ -537,38 +537,16 @@ struct BitmapDrawingInfo {
   BitmapDrawingInfo(int X_, int Y_, Bitmap const * bitmap_) : X(X_), Y(Y_), bitmap(bitmap_) { }
 } __attribute__ ((packed));
 
+
 struct BitmapTransformedDrawingInfo {
   Bitmap const * bitmap;
-  // float transformA;
-  // float transformB;
-  // float transformC;
-  // float transformD;
-  // float transformE;
-  // float transformF;
-  // float transformMatrix[9];
-  float const * transformMatrix;
-  float const * transformInverse;
-  bool          freeMatrix;
+  float const *  transformMatrix;
+  float const *  transformInverse;
+  bool           freeMatrix;
 
   BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const * transformMatrix_, float const * transformInverse_) : 
-  bitmap(bitmap_), transformMatrix(transformMatrix_), transformInverse(transformInverse_), freeMatrix(false) {  }
-
-  // // BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const transformMatrix_[9]) : bitmap(bitmap_) {
-  // BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const * transformMatrix_) : bitmap(bitmap_) {
-  //   // transformA = transformMatrix_[0];
-  //   // transformB = transformMatrix_[1];
-  //   // transformC = transformMatrix_[2];
-  //   // transformD = transformMatrix_[3];
-  //   // transformE = transformMatrix_[4];
-  //   // transformF = transformMatrix_[5];
-  //   transformMatrix = transformMatrix_;
-
-  //   // for (int i = 0; i < 9; i++) {
-  //   //   transformMatrix[i] = transformMatrix_[i];
-  //   // }
-  //   freeMatrix = false;
-  // }
-} __attribute__ ((packed));;
+    bitmap(bitmap_), transformMatrix(transformMatrix_), transformInverse(transformInverse_), freeMatrix(false) { }
+} __attribute__ ((packed));
 
 
 /** \ingroup Enumerations
@@ -1072,13 +1050,13 @@ protected:
 
   virtual void rawCopyToBitmap(int srcX, int srcY, int width, void * saveBuffer, int X1, int Y1, int XCount, int YCount) = 0;
 
-  // virtual void rawDrawBitmapWithMatrix_Native(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+  // virtual void rawDrawBitmapWithMatrix_Native(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
 
-  // virtual void rawDrawBitmapWithMatrix_Mask(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+  // virtual void rawDrawBitmapWithMatrix_Mask(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
   
   virtual void rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
   
-  // virtual void rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, dspm::Mat & invMatrix) = 0;
+  // virtual void rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
 
   //// implemented methods
 

@@ -635,6 +635,17 @@ void VGA2Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, 
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
 
+  if (paintState().paintOptions.swapFGBG) {
+    // used for bitmap plots to indicate drawing with BG color instead of bitmap color
+    auto bg = RGB888toPaletteIndex(paintState().penColor);
+    genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
+                                              [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                              // VGA2_GETPIXELINROW
+                                              [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, bg); }  // rawSetPixelInRow
+                                             );
+    return;
+  }
+
   genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
                                           [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
                                           // VGA2_GETPIXELINROW
