@@ -2376,25 +2376,16 @@ protected:
     // drawingRect should be all on-screen, pre-clipped, but moved to -originX, -originY
     float pos[3] = {0.0f, 0.0f, 1.0f};
     float srcPos[3] = {0.0f, 0.0f, 1.0f};
-  	// auto posMatrix = dspm::Mat((float *)&pos, 3, 1);
-  	// auto posMatrix = dspm::Mat(3, 1);
-    // posMatrix(2, 0) = 1.0f;
     float maxX = drawingRect.X2;
     float maxY = drawingRect.Y2;
-    // float maxY = 122.0f;
  
     for (float y = drawingRect.Y1; y <= maxY; y++) {
       for (float x = drawingRect.X1; x <= maxX; x++) {
         // calculate the source pixel
         pos[0] = x;
         pos[1] = y;
-        // posMatrix(0, 0) = x;
-        // posMatrix(1, 0) = y;
-        // auto transformed = invMatrix * posMatrix;
         dspm_mult_f32(invMatrix, pos, srcPos, 3, 3, 1);
         
-        // int srcXint = (int) transformed(0, 0);
-        // int srcYint = (int) transformed(1, 0);
         int srcXint = (int) (srcPos[0] - 0.5f);
         int srcYint = (int) (srcPos[1] - 0.5f);
         if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
