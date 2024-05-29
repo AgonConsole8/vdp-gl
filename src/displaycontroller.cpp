@@ -1449,17 +1449,17 @@ void IRAM_ATTR BitmappedDisplayController::drawBitmapWithTransform(BitmapTransfo
     //   rawDrawBitmapWithMatrix_Native(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
     //   break;
 
-    // case PixelFormat::Mask:
-    //   rawDrawBitmapWithMatrix_Mask(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
-    //   break;
+    case PixelFormat::Mask:
+      rawDrawBitmapWithMatrix_Mask(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
+      break;
 
     case PixelFormat::RGBA2222:
       rawDrawBitmapWithMatrix_RGBA2222(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
       break;
 
-    // case PixelFormat::RGBA8888:
-    //   rawDrawBitmapWithMatrix_RGBA8888(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
-    //   break;
+    case PixelFormat::RGBA8888:
+      rawDrawBitmapWithMatrix_RGBA8888(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
+      break;
 
   }
 
