@@ -638,7 +638,7 @@ void VGA2Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, 
   genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
                                           [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
                                           // VGA2_GETPIXELINROW
-                                          [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, src); }  // rawSetPixelInRow
+                                          [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, RGB2222toPaletteIndex(src)); }  // rawSetPixelInRow
                                          );
 }
 
