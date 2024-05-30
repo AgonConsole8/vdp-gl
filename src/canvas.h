@@ -821,8 +821,9 @@ public:
    *
    * @param bitmap Pointer to bitmap structure.
    * @param transform 3x3 matrix to apply to the bitmap.
+   * @param invTransform inverse of transform, used to work out source pixels in bitmap
    */
-  void drawTransformedBitmap(int X, int Y, Bitmap const * bitmap, float const transform[9]);
+  void drawTransformedBitmap(int X, int Y, Bitmap const * bitmap, float const transform[9], float const * invTransform = nullptr);
 
   /**
    * @brief Draws a sequence of lines.
