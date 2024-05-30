@@ -2364,7 +2364,7 @@ protected:
         // calculate the source pixel
         pos[0] = x;
         pos[1] = y;
-        dspm_mult_f32(invMatrix, pos, srcPos, 3, 3, 1);
+        dspm_mult_3x3x1_f32(invMatrix, pos, srcPos);
         
         int srcXint = (int) (srcPos[0] - 0.5f);
         int srcYint = (int) (srcPos[1] - 0.5f);
@@ -2400,7 +2400,7 @@ protected:
         // calculate the source pixel
         pos[0] = x;
         pos[1] = y;
-        dspm_mult_f32(invMatrix, pos, srcPos, 3, 3, 1);
+        dspm_mult_3x3x1_f32(invMatrix, pos, srcPos);
         
         int srcXint = (int) (srcPos[0] - 0.5f);
         int srcYint = (int) (srcPos[1] - 0.5f);
@@ -2435,7 +2435,7 @@ protected:
         // calculate the source pixel
         pos[0] = x;
         pos[1] = y;
-        dspm_mult_f32(invMatrix, pos, srcPos, 3, 3, 1);
+        dspm_mult_3x3x1_f32(invMatrix, pos, srcPos);
         
         int srcXint = (int) (srcPos[0] - 0.5f);
         int srcYint = (int) (srcPos[1] - 0.5f);
