@@ -1371,8 +1371,8 @@ void IRAM_ATTR BitmappedDisplayController::absCopyToBitmap(int srcX, int srcY, B
 void IRAM_ATTR BitmappedDisplayController::drawBitmapWithTransform(BitmapTransformedDrawingInfo const & drawingInfo, Rect & updateRect)
 {
   // work out corners of the bitmap by taking the corners of the bitmap and transforming them by the matrix
-  int x = paintState().origin.X;
-  int y = paintState().origin.Y;
+  int x = paintState().origin.X + drawingInfo.X;
+  int y = paintState().origin.Y + drawingInfo.Y;
   int width = drawingInfo.bitmap->width;
   int height = drawingInfo.bitmap->height;
 

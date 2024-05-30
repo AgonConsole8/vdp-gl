@@ -630,12 +630,12 @@ void VGA2Controller::rawCopyToBitmap(int srcX, int srcY, int width, void * saveB
 }
 
 
-void VGA2Controller::rawDrawBitmapWithMatrix_Mask(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+void VGA2Controller::rawDrawBitmapWithMatrix_Mask(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
   auto foregroundColorIndex = RGB888toPaletteIndex(paintState().paintOptions.swapFGBG ? paintState().penColor : bitmap->foregroundColor);
-  genericRawDrawTransformedBitmap_Mask(originX, originY, drawingRect, bitmap, invMatrix,
+  genericRawDrawTransformedBitmap_Mask(destX, destY, drawingRect, bitmap, invMatrix,
                                           [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
                                           // VGA2_GETPIXELINROW
                                           [&] (uint8_t * row, int x) { setRowPixel(row, x, foregroundColorIndex); }  // rawSetPixelInRow
@@ -643,7 +643,7 @@ void VGA2Controller::rawDrawBitmapWithMatrix_Mask(int originX, int originY, Rect
 }
 
 
-void VGA2Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+void VGA2Controller::rawDrawBitmapWithMatrix_RGBA2222(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -651,7 +651,7 @@ void VGA2Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, 
   if (paintState().paintOptions.swapFGBG) {
     // used for bitmap plots to indicate drawing with BG color instead of bitmap color
     auto bg = RGB888toPaletteIndex(paintState().penColor);
-    genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
+    genericRawDrawTransformedBitmap_RGBA2222(destX, destY, drawingRect, bitmap, invMatrix,
                                               [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
                                               // VGA2_GETPIXELINROW
                                               [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, bg); }  // rawSetPixelInRow
@@ -659,7 +659,7 @@ void VGA2Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, 
     return;
   }
 
-  genericRawDrawTransformedBitmap_RGBA2222(originX, originY, drawingRect, bitmap, invMatrix,
+  genericRawDrawTransformedBitmap_RGBA2222(destX, destY, drawingRect, bitmap, invMatrix,
                                           [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
                                           // VGA2_GETPIXELINROW
                                           [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, RGB2222toPaletteIndex(src)); }  // rawSetPixelInRow
@@ -667,7 +667,7 @@ void VGA2Controller::rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, 
 }
 
 
-void VGA2Controller::rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+void VGA2Controller::rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -675,7 +675,7 @@ void VGA2Controller::rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, 
   if (paintState().paintOptions.swapFGBG) {
     // used for bitmap plots to indicate drawing with BG color instead of bitmap color
     auto bg = RGB888toPaletteIndex(paintState().penColor);
-    genericRawDrawTransformedBitmap_RGBA8888(originX, originY, drawingRect, bitmap, invMatrix,
+    genericRawDrawTransformedBitmap_RGBA8888(destX, destY, drawingRect, bitmap, invMatrix,
                                             [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
                                             // VGA2_GETPIXELINROW,                                                                     // rawGetPixelInRow
                                             [&] (uint8_t * row, int x, RGBA8888 const & src) { setRowPixel(row, x, bg); }           // rawSetPixelInRow
@@ -683,7 +683,7 @@ void VGA2Controller::rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, 
     return;
   }
 
-  genericRawDrawTransformedBitmap_RGBA8888(originX, originY, drawingRect, bitmap, invMatrix,
+  genericRawDrawTransformedBitmap_RGBA8888(destX, destY, drawingRect, bitmap, invMatrix,
                                           [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
                                           // VGA2_GETPIXELINROW,                                                                      // rawGetPixelInRow
                                           [&] (uint8_t * row, int x, RGBA8888 const & src) { setRowPixel(row, x, RGB8888toPaletteIndex(src)); }   // rawSetPixelInRow

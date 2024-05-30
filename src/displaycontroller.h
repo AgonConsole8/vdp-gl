@@ -539,13 +539,15 @@ struct BitmapDrawingInfo {
 
 
 struct BitmapTransformedDrawingInfo {
+  int16_t        X;
+  int16_t        Y;
   Bitmap const * bitmap;
   float const *  transformMatrix;
   float const *  transformInverse;
   bool           freeMatrix;
 
-  BitmapTransformedDrawingInfo(Bitmap const * bitmap_, float const * transformMatrix_, float const * transformInverse_) : 
-    bitmap(bitmap_), transformMatrix(transformMatrix_), transformInverse(transformInverse_), freeMatrix(false) { }
+  BitmapTransformedDrawingInfo(int X_, int Y_, Bitmap const * bitmap_, float const * transformMatrix_, float const * transformInverse_) : 
+    X(X_), Y(Y_), bitmap(bitmap_), transformMatrix(transformMatrix_), transformInverse(transformInverse_), freeMatrix(false) { }
 } __attribute__ ((packed));
 
 
@@ -1050,13 +1052,13 @@ protected:
 
   virtual void rawCopyToBitmap(int srcX, int srcY, int width, void * saveBuffer, int X1, int Y1, int XCount, int YCount) = 0;
 
-  // virtual void rawDrawBitmapWithMatrix_Native(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
+  // virtual void rawDrawBitmapWithMatrix_Native(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
 
-  virtual void rawDrawBitmapWithMatrix_Mask(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
+  virtual void rawDrawBitmapWithMatrix_Mask(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
   
-  virtual void rawDrawBitmapWithMatrix_RGBA2222(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
+  virtual void rawDrawBitmapWithMatrix_RGBA2222(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
   
-  virtual void rawDrawBitmapWithMatrix_RGBA8888(int originX, int originY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
+  virtual void rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix) = 0;
 
   //// implemented methods
 
@@ -2344,14 +2346,14 @@ protected:
 
 
   template <typename TRawGetRow, /*typename TRawGetPixelInRow,*/ typename TRawSetPixelInRow /*, typename TBackground */>
-  void genericRawDrawTransformedBitmap_Mask(int originX, int originY, Rect drawingRect, Bitmap const * bitmap, const float * invMatrix,
+  void genericRawDrawTransformedBitmap_Mask(int destX, int destY, Rect drawingRect, Bitmap const * bitmap, const float * invMatrix,
                                      TRawGetRow rawGetRow, /* TRawGetPixelInRow rawGetPixelInRow, */ TRawSetPixelInRow rawSetPixelInRow)
   {
     // transformed bitmap plot works as follows:
     // 1. for each pixel in the destination rectangle, calculate the corresponding pixel in the source bitmap
     // 2. if the source pixel is within source, and is not transparent, plot it to the destination
     //
-    // drawingRect should be all on-screen, pre-clipped, but moved to -originX, -originY
+    // drawingRect should be all on-screen, pre-clipped, but moved to -destX, -destY
     float pos[3] = {0.0f, 0.0f, 1.0f};
     float srcPos[3] = {0.0f, 0.0f, 1.0f};
     float maxX = drawingRect.X2;
@@ -2372,7 +2374,7 @@ protected:
 
           auto srcRow = data + srcYint * rowlen;
           if ((srcRow[srcXint >> 3] << (srcXint & 7)) & 0x80)
-            rawSetPixelInRow(rawGetRow((int)y + originY), (int)x + originX);
+            rawSetPixelInRow(rawGetRow((int)y + destY), (int)x + destX);
         }
       }
     }
@@ -2380,14 +2382,14 @@ protected:
 
 
   template <typename TRawGetRow, /*typename TRawGetPixelInRow,*/ typename TRawSetPixelInRow /*, typename TBackground */>
-  void genericRawDrawTransformedBitmap_RGBA2222(int originX, int originY, Rect drawingRect, Bitmap const * bitmap, const float * invMatrix,
+  void genericRawDrawTransformedBitmap_RGBA2222(int destX, int destY, Rect drawingRect, Bitmap const * bitmap, const float * invMatrix,
                                      TRawGetRow rawGetRow, /* TRawGetPixelInRow rawGetPixelInRow, */ TRawSetPixelInRow rawSetPixelInRow)
   {
     // transformed bitmap plot works as follows:
     // 1. for each pixel in the destination rectangle, calculate the corresponding pixel in the source bitmap
     // 2. if the source pixel is within source, and is not transparent, plot it to the destination
     //
-    // drawingRect should be all on-screen, pre-clipped, but moved to -originX, -originY
+    // drawingRect should be all on-screen, pre-clipped, but moved to -destX, -destY
     float pos[3] = {0.0f, 0.0f, 1.0f};
     float srcPos[3] = {0.0f, 0.0f, 1.0f};
     float maxX = drawingRect.X2;
@@ -2407,7 +2409,7 @@ protected:
         if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
           auto src = data + srcYint * width + srcXint;
           if (*src & 0xc0)  // alpha > 0 ?
-            rawSetPixelInRow(rawGetRow((int)y + originY), (int)x + originX, *src);
+            rawSetPixelInRow(rawGetRow((int)y + destY), (int)x + destX, *src);
         }
       }
     }
@@ -2415,14 +2417,14 @@ protected:
 
 
   template <typename TRawGetRow, /*typename TRawGetPixelInRow,*/ typename TRawSetPixelInRow /*, typename TBackground */>
-  void genericRawDrawTransformedBitmap_RGBA8888(int originX, int originY, Rect drawingRect, Bitmap const * bitmap, const float * invMatrix,
+  void genericRawDrawTransformedBitmap_RGBA8888(int destX, int destY, Rect drawingRect, Bitmap const * bitmap, const float * invMatrix,
                                      TRawGetRow rawGetRow, /* TRawGetPixelInRow rawGetPixelInRow, */ TRawSetPixelInRow rawSetPixelInRow)
   {
     // transformed bitmap plot works as follows:
     // 1. for each pixel in the destination rectangle, calculate the corresponding pixel in the source bitmap
     // 2. if the source pixel is within source, and is not transparent, plot it to the destination
     //
-    // drawingRect should be all on-screen, pre-clipped, but moved to -originX, -originY
+    // drawingRect should be all on-screen, pre-clipped, but moved to -destX, -destY
     float pos[3] = {0.0f, 0.0f, 1.0f};
     float srcPos[3] = {0.0f, 0.0f, 1.0f};
     float maxX = drawingRect.X2;
@@ -2442,7 +2444,7 @@ protected:
         if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
           auto src = data + srcYint * width + srcXint;
           if (src->A)
-            rawSetPixelInRow(rawGetRow((int)y + originY),  (int)x + originX, *src);
+            rawSetPixelInRow(rawGetRow((int)y + destY),  (int)x + destX, *src);
         }
       }
     }

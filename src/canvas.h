@@ -822,7 +822,7 @@ public:
    * @param bitmap Pointer to bitmap structure.
    * @param transform 3x3 matrix to apply to the bitmap.
    */
-  void drawTransformedBitmap(Bitmap const * bitmap, float const transform[9]);
+  void drawTransformedBitmap(int X, int Y, Bitmap const * bitmap, float const transform[9]);
 
   /**
    * @brief Draws a sequence of lines.
