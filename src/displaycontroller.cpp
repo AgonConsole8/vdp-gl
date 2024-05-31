@@ -1389,30 +1389,30 @@ void IRAM_ATTR BitmappedDisplayController::drawBitmapWithTransform(BitmapTransfo
   dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
   minX = imin(minX, (int)transformed[0]);
   minY = imin(minY, (int)transformed[1]);
-  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
-  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
 
   pos[0] = (float)originalBox.X2;
   dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
   minX = imin(minX, (int)transformed[0]);
   minY = imin(minY, (int)transformed[1]);
-  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
-  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
 
   pos[0] = (float)originalBox.X1;
   pos[1] = (float)originalBox.Y2;
   dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
   minX = imin(minX, (int)transformed[0]);
   minY = imin(minY, (int)transformed[1]);
-  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
-  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
 
   pos[0] = (float)originalBox.X2;
   dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
   minX = imin(minX, (int)transformed[0]);
   minY = imin(minY, (int)transformed[1]);
-  maxX = imax(maxX, (int)(transformed[0] + 0.5f));
-  maxY = imax(maxY, (int)(transformed[1] + 0.5f));
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
 
   Rect transformedBox = Rect(minX, minY, maxX, maxY);
 

@@ -2360,22 +2360,23 @@ protected:
     float maxY = drawingRect.Y2;
     auto data = bitmap->data;
     const int rowlen = (bitmap->width + 7) / 8;
+    const float widthF = (float)bitmap->width;
+    const float heightF = (float)bitmap->height;
  
-    for (float y = drawingRect.Y1; y <= maxY; y++) {
-      for (float x = drawingRect.X1; x <= maxX; x++) {
+    for (float y = drawingRect.Y1; y < maxY; y++) {
+      for (float x = drawingRect.X1; x < maxX; x++) {
         // calculate the source pixel
         pos[0] = x;
         pos[1] = y;
         dspm_mult_3x3x1_f32(invMatrix, pos, srcPos);
-        
-        int srcXint = (int) (srcPos[0] - 0.5f);
-        int srcYint = (int) (srcPos[1] - 0.5f);
-        if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
 
-          auto srcRow = data + srcYint * rowlen;
-          if ((srcRow[srcXint >> 3] << (srcXint & 7)) & 0x80)
-            rawSetPixelInRow(rawGetRow((int)y + destY), (int)x + destX);
-        }
+        if (srcPos[0] < 0.0f || srcPos[0] >= widthF || srcPos[1] < 0 || srcPos[1] >= heightF)
+          continue;
+
+        auto srcRow = data + (int)srcPos[1] * rowlen;
+        int srcXint = (int)srcPos[0];
+        if ((srcRow[srcXint >> 3] << (srcXint & 7)) & 0x80)
+          rawSetPixelInRow(rawGetRow((int)y + destY), (int)x + destX);
       }
     }
   }
@@ -2396,21 +2397,22 @@ protected:
     float maxY = drawingRect.Y2;
     auto data = bitmap->data;
     const int width = bitmap->width;
+    const float widthF = (float)width;
+    const float heightF = (float)bitmap->height;
  
-    for (float y = drawingRect.Y1; y <= maxY; y++) {
-      for (float x = drawingRect.X1; x <= maxX; x++) {
+    for (float y = drawingRect.Y1; y < maxY; y++) {
+      for (float x = drawingRect.X1; x < maxX; x++) {
         // calculate the source pixel
         pos[0] = x;
         pos[1] = y;
         dspm_mult_3x3x1_f32(invMatrix, pos, srcPos);
-        
-        int srcXint = (int) (srcPos[0] - 0.5f);
-        int srcYint = (int) (srcPos[1] - 0.5f);
-        if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
-          auto src = data + srcYint * width + srcXint;
-          if (*src & 0xc0)  // alpha > 0 ?
-            rawSetPixelInRow(rawGetRow((int)y + destY), (int)x + destX, *src);
-        }
+
+        if (srcPos[0] < 0.0f || srcPos[0] >= widthF || srcPos[1] < 0 || srcPos[1] >= heightF)
+          continue;
+
+        auto src = data + (int)srcPos[1] * width + (int)srcPos[0];
+        if (*src & 0xc0)  // alpha > 0 ?
+          rawSetPixelInRow(rawGetRow((int)y + destY), (int)x + destX, *src);
       }
     }
   }
@@ -2431,21 +2433,22 @@ protected:
     float maxY = drawingRect.Y2;
     auto data = (RGBA8888 const *) bitmap->data;
     const int width = bitmap->width;
+    const float widthF = (float)width;
+    const float heightF = (float)bitmap->height;
  
-    for (float y = drawingRect.Y1; y <= maxY; y++) {
-      for (float x = drawingRect.X1; x <= maxX; x++) {
+    for (float y = drawingRect.Y1; y < maxY; y++) {
+      for (float x = drawingRect.X1; x < maxX; x++) {
         // calculate the source pixel
         pos[0] = x;
         pos[1] = y;
         dspm_mult_3x3x1_f32(invMatrix, pos, srcPos);
-        
-        int srcXint = (int) (srcPos[0] - 0.5f);
-        int srcYint = (int) (srcPos[1] - 0.5f);
-        if (srcXint >= 0 && srcXint < bitmap->width && srcYint >= 0 && srcYint < bitmap->height) {
-          auto src = data + srcYint * width + srcXint;
-          if (src->A)
-            rawSetPixelInRow(rawGetRow((int)y + destY),  (int)x + destX, *src);
-        }
+
+        if (srcPos[0] < 0.0f || srcPos[0] >= widthF || srcPos[1] < 0 || srcPos[1] >= heightF)
+          continue;
+
+        auto src = data + (int)srcPos[1] * width + (int)srcPos[0];
+        if (src->A)
+          rawSetPixelInRow(rawGetRow((int)y + destY),  (int)x + destX, *src);
       }
     }
   }
