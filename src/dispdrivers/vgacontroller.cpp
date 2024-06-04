@@ -740,4 +740,66 @@ void IRAM_ATTR VGAController::rawCopyToBitmap(int srcX, int srcY, int width, voi
 }
 
 
+void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_Mask(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+{
+  auto paintMode = paintState().paintOptions.mode;
+  auto setRowPixel = setRowPixelLambda(paintMode);
+  auto getPixel = getPixelLambda(paintMode);
+  auto pattern = getPixel(paintState().paintOptions.swapFGBG ? paintState().penColor : bitmap->foregroundColor);
+  genericRawDrawTransformedBitmap_Mask(destX, destY, drawingRect, bitmap, invMatrix,
+                                          [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                          // [&] (uint8_t * row, int x) { return VGA_PIXELINROW(row, x); },    // rawGetPixelInRow
+                                          [&] (uint8_t * row, int x) { setRowPixel(row, x, pattern); }  // rawSetPixelInRow
+                                         );
+}
+
+
+void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_RGBA2222(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+{
+  auto paintMode = paintState().paintOptions.mode;
+  auto setRowPixel = setRowPixelLambda(paintMode);
+
+  if (paintState().paintOptions.swapFGBG) {
+    // used for bitmap plots to indicate drawing with BG color instead of bitmap color
+    auto bg = preparePixel(paintState().penColor);
+    genericRawDrawTransformedBitmap_RGBA2222(destX, destY, drawingRect, bitmap, invMatrix,
+                                            [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                            // [&] (uint8_t * row, int x) { return VGA_PIXELINROW(row, x); },    // rawGetPixelInRow
+                                            [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, bg); }  // rawSetPixelInRow
+                                          );
+    return;
+  }
+
+  genericRawDrawTransformedBitmap_RGBA2222(destX, destY, drawingRect, bitmap, invMatrix,
+                                          [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                          // [&] (uint8_t * row, int x) { return VGA_PIXELINROW(row, x); },    // rawGetPixelInRow
+                                          [&] (uint8_t * row, int x, uint8_t src) { setRowPixel(row, x, src); }  // rawSetPixelInRow
+                                         );
+}
+
+
+void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+{
+  auto paintMode = paintState().paintOptions.mode;
+  auto setRowPixel = setRowPixelLambda(paintMode);
+
+  if (paintState().paintOptions.swapFGBG) {
+    // used for bitmap plots to indicate drawing with BG color instead of bitmap color
+    auto bg = preparePixel(paintState().penColor);
+    genericRawDrawTransformedBitmap_RGBA8888(destX, destY, drawingRect, bitmap, invMatrix,
+                                            [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                            // [&] (uint8_t * row, int x) { return VGA_PIXELINROW(row, x); },    // rawGetPixelInRow
+                                            [&] (uint8_t * row, int x, RGBA8888 const & src) { setRowPixel(row, x, bg); }           // rawSetPixelInRow
+                                          );
+    return;
+  }
+
+  genericRawDrawTransformedBitmap_RGBA8888(destX, destY, drawingRect, bitmap, invMatrix,
+                                          [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
+                                          // [&] (uint8_t * row, int x) { return VGA_PIXELINROW(row, x); },    // rawGetPixelInRow
+                                          [&] (uint8_t * row, int x, RGBA8888 const & src) { setRowPixel(row, x, m_HVSync | (src.R >> 6) | (src.G >> 6 << 2) | (src.B >> 6 << 4)); }   // rawSetPixelInRow
+                                         );
+}
+
+
 } // end of namespace

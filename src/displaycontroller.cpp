@@ -464,6 +464,23 @@ void BitmappedDisplayController::primitiveReplaceDynamicBuffers(Primitive & prim
       }
       break;
     }
+    case PrimitiveCmd::DrawTransformedBitmap:
+    {
+      int sz = sizeof(float) * 9;
+      void * newbuf = nullptr;
+      // wait until we have enough free space
+      while ((newbuf = m_primDynMemPool.alloc(sz)) == nullptr)
+        taskYIELD();
+      memcpy(newbuf, primitive.bitmapTransformedDrawingInfo.transformMatrix, sz);
+      primitive.bitmapTransformedDrawingInfo.transformMatrix = (float*)newbuf;
+      // copy the inv matrix too
+      while ((newbuf = m_primDynMemPool.alloc(sz)) == nullptr)
+        taskYIELD();
+      memcpy(newbuf, primitive.bitmapTransformedDrawingInfo.transformInverse, sz);
+      primitive.bitmapTransformedDrawingInfo.transformInverse = (float*)newbuf;
+      primitive.bitmapTransformedDrawingInfo.freeMatrix = true;
+      break;
+    }
 
     default:
       break;
@@ -797,6 +814,33 @@ void IRAM_ATTR BitmappedDisplayController::execPrimitive(Primitive const & prim,
     case PrimitiveCmd::CopyToBitmap:
       copyToBitmap(prim.bitmapDrawingInfo);
       break;
+    case PrimitiveCmd::DrawTransformedBitmap: {
+      if (insideISR) {
+        uint32_t cp0_regs[18];
+        // get FPU state
+        uint32_t cp_state = xthal_get_cpenable();
+        
+        if (cp_state) {
+          // Save FPU registers
+          xthal_save_cp0(cp0_regs);
+        } else {
+          // enable FPU
+          xthal_set_cpenable(1);
+        }
+        
+        drawBitmapWithTransform(prim.bitmapTransformedDrawingInfo, updateRect);
+
+        if (cp_state) {
+          // Restore FPU registers
+          xthal_restore_cp0(cp0_regs);
+        } else {
+          // turn it back off
+          xthal_set_cpenable(0);
+        }
+      } else {
+        drawBitmapWithTransform(prim.bitmapTransformedDrawingInfo, updateRect);
+      }
+    }  break;
     case PrimitiveCmd::RefreshSprites:
       hideSprites(updateRect);
       showSprites(updateRect);
@@ -1321,6 +1365,108 @@ void IRAM_ATTR BitmappedDisplayController::absCopyToBitmap(int srcX, int srcY, B
     YCount = height - Y1;
 
   rawCopyToBitmap(srcX, srcY, width, bitmap->data, X1, Y1, XCount, YCount);
+}
+
+
+void IRAM_ATTR BitmappedDisplayController::drawBitmapWithTransform(BitmapTransformedDrawingInfo const & drawingInfo, Rect & updateRect)
+{
+  // work out corners of the bitmap by taking the corners of the bitmap and transforming them by the matrix
+  int x = paintState().origin.X + drawingInfo.X;
+  int y = paintState().origin.Y + drawingInfo.Y;
+  int width = drawingInfo.bitmap->width;
+  int height = drawingInfo.bitmap->height;
+
+  Rect originalBox = Rect(0, 0, width, height);
+  auto transformMatrix = drawingInfo.transformMatrix;
+
+  // work out each corner's new position
+  int minX = INT_MAX;
+  int minY = INT_MAX;
+  int maxX = INT_MIN;
+  int maxY = INT_MIN;
+  float pos[3] = { (float)originalBox.X1, (float)originalBox.Y1, 1.0f };
+  float transformed[3];
+  dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
+
+  pos[0] = (float)originalBox.X2;
+  dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
+
+  pos[0] = (float)originalBox.X1;
+  pos[1] = (float)originalBox.Y2;
+  dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
+
+  pos[0] = (float)originalBox.X2;
+  dspm_mult_3x3x1_f32(transformMatrix, pos, transformed);
+  minX = imin(minX, (int)transformed[0]);
+  minY = imin(minY, (int)transformed[1]);
+  maxX = imax(maxX, (int)transformed[0]);
+  maxY = imax(maxY, (int)transformed[1]);
+
+  Rect transformedBox = Rect(minX, minY, maxX, maxY);
+
+  // transformed box at this point is the bounding box _without_ taking into account origin
+  // drawingRect gets translated, and then clipped to the current clipping rect
+  Rect drawingRect = transformedBox.translate(x, y).intersection(paintState().absClippingRect);
+
+  if (drawingRect.width() == 0 || drawingRect.height() == 0) {
+    // no area within our current clipping rect to draw
+    if (drawingInfo.freeMatrix) {
+      m_primDynMemPool.free((void*)drawingInfo.transformMatrix);
+      m_primDynMemPool.free((void*)drawingInfo.transformInverse);
+    }
+    return;
+  }
+
+  updateRect = updateRect.merge(drawingRect);
+  hideSprites(updateRect);
+
+  // translate our drawing rect _back_ to the origin
+  // NB agon-vdp never adjusts the vdp-gl canvas origin, so this is essentially unnecessary, and untested
+  drawingRect = drawingRect.translate(-x, -y);
+
+  // drawingRect is now the translated area of the bitmap that we want to draw
+  // using an inverted matrix, we can work out the original pixels in the bitmap to draw on-screen
+
+  // Draw the bitmap
+  switch (drawingInfo.bitmap->format) {
+
+    case PixelFormat::Undefined:
+      break;
+
+    // case PixelFormat::Native:
+    //   rawDrawBitmapWithMatrix_Native(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
+    //   break;
+
+    case PixelFormat::Mask:
+      rawDrawBitmapWithMatrix_Mask(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
+      break;
+
+    case PixelFormat::RGBA2222:
+      rawDrawBitmapWithMatrix_RGBA2222(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
+      break;
+
+    case PixelFormat::RGBA8888:
+      rawDrawBitmapWithMatrix_RGBA8888(x, y, drawingRect, drawingInfo.bitmap, drawingInfo.transformInverse);
+      break;
+
+  }
+
+  if (drawingInfo.freeMatrix) {
+    m_primDynMemPool.free((void*)drawingInfo.transformMatrix);
+    m_primDynMemPool.free((void*)drawingInfo.transformInverse);
+  }
 }
 
 
