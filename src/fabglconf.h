@@ -127,7 +127,8 @@
 
 
 /** Size (in bytes) of largest block to maintain free */
-#define FABGLIB_MINFREELARGESTBLOCK 40000
+// #define FABGLIB_MINFREELARGESTBLOCK 40000
+#define FABGLIB_MINFREELARGESTBLOCK 4000
 
 
 /** Size of virtualkey queue */
