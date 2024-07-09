@@ -523,6 +523,9 @@ struct Bitmap {
 
   int getAlpha(int x, int y);
 
+  RGBA2222 getPixel2222(int x, int y) const;
+  RGBA8888 getPixel8888(int x, int y) const;
+
 private:
   void allocate();
   void copyFrom(void const * srcData);
