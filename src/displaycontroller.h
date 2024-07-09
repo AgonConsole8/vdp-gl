@@ -593,7 +593,7 @@ struct Cursor {
 struct QuadTreeObject;
 
 
-enum PaintMode : uint8_t {
+enum class PaintMode : uint8_t {
   Set = 0,      // Plot colour
   OR = 1,       // OR colour onto screen
   AND = 2,      // AND colour onto screen
