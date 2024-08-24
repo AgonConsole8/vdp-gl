@@ -359,6 +359,94 @@ int Bitmap::getAlpha(int x, int y)
 }
 
 
+RGBA2222 Bitmap::getPixel2222(int x, int y) const {
+  RGBA2222 value = RGBA2222(0,0,0,0);
+
+  if (x < 0 || x >= width || y < 0 || y >= height) {
+    return value;
+  }
+
+  switch (format) {
+    case PixelFormat::Undefined:
+      break;
+    case PixelFormat::Native:
+      break;
+    case PixelFormat::Mask:
+    {
+      int rowlen = (width + 7) / 8;
+      uint8_t * rowptr = data + y * rowlen;
+      value.A = (rowptr[x >> 3] >> (7 - (x & 7))) & 1 ? 3 : 0;
+      if (value.A) {
+        value.R = foregroundColor.R >> 6;
+        value.G = foregroundColor.G >> 6;
+        value.B = foregroundColor.B >> 6;
+      } else {
+        value.R = value.G = value.B = 0;
+      }
+      break;
+    }
+    case PixelFormat::RGBA2222:
+      value = ((RGBA2222*)data)[y * width + x];
+      break;
+    case PixelFormat::RGBA8888:
+    {
+      RGBA8888 rgba = ((RGBA8888*)data)[y * width + x];
+      value.A = rgba.A >> 6;
+      value.B = rgba.B >> 6;
+      value.G = rgba.G >> 6;
+      value.R = rgba.R >> 6;
+      break;
+    }
+  }
+
+  return value;
+}
+
+
+RGBA8888 Bitmap::getPixel8888(int x, int y) const {
+  RGBA8888 value = RGBA8888(0,0,0,0);
+
+  if (x < 0 || x >= width || y < 0 || y >= height) {
+    return value;
+  }
+
+  switch (format) {
+    case PixelFormat::Undefined:
+      break;
+    case PixelFormat::Native:
+      break;
+    case PixelFormat::Mask:
+    {
+      int rowlen = (width + 7) / 8;
+      uint8_t * rowptr = data + y * rowlen;
+      value.A = (rowptr[x >> 3] >> (7 - (x & 7))) & 1 ? 255 : 0;
+      if (value.A) {
+        value.R = foregroundColor.R;
+        value.G = foregroundColor.G;
+        value.B = foregroundColor.B;
+      } else {
+        value.R = value.G = value.B = 0;
+      }
+      break;
+    }
+    case PixelFormat::RGBA2222:
+    {
+      RGBA2222 rgba = ((RGBA2222*)data)[y * width + x];
+      value.A = rgba.A * 85;
+      value.B = rgba.B * 85;
+      value.G = rgba.G * 85;
+      value.R = rgba.R * 85;
+      break;
+    }
+    case PixelFormat::RGBA8888:
+      value = ((RGBA8888*)data)[y * width + x];
+      break;
+  }
+
+  return value;
+}
+
+
 Bitmap::~Bitmap()
 {
   if (dataAllocated)

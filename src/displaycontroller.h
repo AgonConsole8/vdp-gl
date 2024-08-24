@@ -523,6 +523,9 @@ struct Bitmap {
 
   int getAlpha(int x, int y);
 
+  RGBA2222 getPixel2222(int x, int y) const;
+  RGBA8888 getPixel8888(int x, int y) const;
+
 private:
   void allocate();
   void copyFrom(void const * srcData);
@@ -590,7 +593,7 @@ struct Cursor {
 struct QuadTreeObject;
 
 
-enum PaintMode : uint8_t {
+enum class PaintMode : uint8_t {
   Set = 0,      // Plot colour
   OR = 1,       // OR colour onto screen
   AND = 2,      // AND colour onto screen
