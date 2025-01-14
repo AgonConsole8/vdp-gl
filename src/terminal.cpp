@@ -326,6 +326,8 @@ bool Terminal::begin(BaseDisplayController * displayController, int maxColumns, 
   m_displayController = displayController;
   m_bitmappedDisplayController = (m_displayController->controllerType() == DisplayControllerType::Bitmapped);
 
+  m_endingState = false;
+  
   m_maxColumns = maxColumns;
   m_maxRows    = maxRows;
 
@@ -411,15 +413,30 @@ bool Terminal::begin(BaseDisplayController * displayController, int maxColumns, 
 
 void Terminal::end()
 {
-  if (m_keyboardReaderTaskHandle)
+  m_endingState = true;
+
+  if (m_keyboardReaderTaskHandle) {
+    #ifdef FABGL_EMULATED
+    m_keyboard->injectVirtualKey(VirtualKey::VK_ESCAPE, true, false);
+    #endif
     vTaskDelete(m_keyboardReaderTaskHandle);
+  }
 
   xTimerDelete(m_blinkTimer, portMAX_DELAY);
 
   clearSavedCursorStates();
 
+  uint8_t b = 0;
+  xQueueSendToBack(m_inputQueue, &b, portMAX_DELAY);
+  while (uxQueueMessagesWaiting(m_inputQueue) > 0)
+    taskYIELD();
+  
   vTaskDelete(m_charsConsumerTaskHandle);
+  
+  vTaskDelay(10 / portTICK_PERIOD_MS);
+
   vQueueDelete(m_inputQueue);
+  m_inputQueue = nullptr;
 
   if (m_outputQueue)
     vQueueDelete(m_outputQueue);
@@ -2350,7 +2367,7 @@ GlyphOptions Terminal::getGlyphOptionsAt(int X, int Y)
 // blocking operation
 uint8_t Terminal::getNextCode(bool processCtrlCodes)
 {
-  while (true) {
+  while (!m_endingState && m_inputQueue) {
     uint8_t c;
     xQueueReceive(m_inputQueue, &c, portMAX_DELAY);
 
@@ -2367,6 +2384,7 @@ uint8_t Terminal::getNextCode(bool processCtrlCodes)
     else
       return c;
   }
+  return 0;
 }
 
 
@@ -2374,14 +2392,25 @@ void Terminal::charsConsumerTask(void * pvParameters)
 {
   Terminal * term = (Terminal*) pvParameters;
 
-  while (true)
+  while (!term->m_endingState && term->m_inputQueue && term->m_mutex) {
+
+    #ifdef FABGL_EMULATED
+    taskEmuCheck();
+    #endif
+
     term->consumeInputQueue();
+  }
+  
+  taskExit();
 }
 
 
 void Terminal::consumeInputQueue()
 {
   uint8_t c = getNextCode(false);  // blocking call. false: do not process ctrl chars
+
+  if (!m_mutex)
+    return;
 
   xSemaphoreTake(m_mutex, portMAX_DELAY);
 
@@ -2706,13 +2735,13 @@ uint8_t Terminal::consumeParamsAndGetCode(int * params, int * paramsCount, bool 
       #endif
 
       // reset non specified parameters
-      while (p < params + FABGLIB_MAX_CSI_PARAMS)
+      while (p < params + FABGLIB_MAX_CSI_PARAMS - 1)
         *(++p) = 0;
 
       return c;
     }
 
-    if (p < params + FABGLIB_MAX_CSI_PARAMS) {
+    if (p < params + FABGLIB_MAX_CSI_PARAMS - 1) {
       if (c == ';') {
         ++p;
         *p = 0;
@@ -4586,7 +4615,11 @@ void Terminal::keyboardReaderTask(void * pvParameters)
 {
   Terminal * term = (Terminal*) pvParameters;
 
-  while (true) {
+  while (!term->m_endingState) {
+
+    #ifdef FABGL_EMULATED
+    taskEmuCheck();
+    #endif
 
     if (!term->isActive())
       vTaskSuspend(NULL);
@@ -4636,6 +4669,7 @@ void Terminal::keyboardReaderTask(void * pvParameters)
     }
 
   }
+  taskExit();
 }
 
 
