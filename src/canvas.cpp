@@ -662,4 +662,12 @@ RGB888 Canvas::getPixel(int X, int Y)
 }
 
 
+void Canvas::noOp()
+{
+  Primitive p;
+  p.cmd = PrimitiveCmd::Flush;
+  m_displayController->addPrimitive(p);
+}
+
+
 } // end of namespace

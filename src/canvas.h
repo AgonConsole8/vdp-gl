@@ -866,6 +866,13 @@ public:
    */
   RGB888 getPixel(int X, int Y);
 
+  /**
+   * @brief Add a no-op to the canvas queue
+   * 
+   * This is useful to force a waitCompletion() to wait for the next VSync
+   */
+  void noOp();
+
 private:
 
   BitmappedDisplayController * m_displayController;
