@@ -112,6 +112,32 @@ VGA16Controller::VGA16Controller()
   : VGAPalettedController(VGA16_LinesCount, VGA16_COLUMNSQUANTUM, NativePixelFormat::PALETTE16, 2, 1, ISRHandler)
 {
   s_instance = this;
+  m_packedPaletteIndexPair_to_signalsList[0] = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  m_packedPaletteIndexPair_to_signalsList[1] = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  // m_packedPaletteIndexPair_to_signals = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  // m_packedPaletteIndexPair_to_signalsAlt = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+
+  m_signalList = (PaletteListItem *) heap_caps_malloc(sizeof(PaletteListItem), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  m_signalList->signals = (void *) m_packedPaletteIndexPair_to_signalsList[0];
+  m_signalList->endRow = 128;
+  m_signalList->next = (PaletteListItem *) heap_caps_malloc(sizeof(PaletteListItem), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  auto next = m_signalList->next;
+  next->signals = (void *) m_packedPaletteIndexPair_to_signalsList[1];
+
+  m_currentSignalItem = m_signalList;
+}
+
+
+VGA16Controller::~VGA16Controller()
+{
+  for (auto it = m_packedPaletteIndexPair_to_signalsList.begin(); it != m_packedPaletteIndexPair_to_signalsList.end();) {
+    if (it->second) {
+      heap_caps_free((void *)it->second);
+    }
+    it = m_packedPaletteIndexPair_to_signalsList.erase(it);
+  }
+  // heap_caps_free((void *)m_packedPaletteIndexPair_to_signals);
+  // heap_caps_free((void *)m_packedPaletteIndexPair_to_signalsAlt);
 }
 
 
@@ -129,11 +155,21 @@ void VGA16Controller::setPaletteItem(int index, RGB888 const & color)
   index %= 16;
   m_palette[index] = color;
   auto packed222 = RGB888toPackedRGB222(color);
+
+  // packSignals(index, packed222, m_packedPaletteIndexPair_to_signals);
+  packSignals(index, packed222, m_packedPaletteIndexPair_to_signalsList[0]);
+  // packSignals(index ^ 0x0F, packed222, m_packedPaletteIndexPair_to_signalsAlt);
+  // packSignals(index, packed222 ^ 0x77, m_packedPaletteIndexPair_to_signalsAlt);
+  packSignals(index, packed222 ^ 0x77, m_packedPaletteIndexPair_to_signalsList[1]);
+}
+
+void VGA16Controller::packSignals(int index, uint8_t packed222, volatile uint16_t * signals)
+{
   for (int i = 0; i < 16; ++i) {
-    m_packedPaletteIndexPair_to_signals[(index << 4) | i] &= 0xFF00;
-    m_packedPaletteIndexPair_to_signals[(index << 4) | i] |= (m_HVSync | packed222);
-    m_packedPaletteIndexPair_to_signals[(i << 4) | index] &= 0x00FF;
-    m_packedPaletteIndexPair_to_signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
+    signals[(index << 4) | i] &= 0xFF00;
+    signals[(index << 4) | i] |= (m_HVSync | packed222);
+    signals[(i << 4) | index] &= 0x00FF;
+    signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
   }
 }
 
@@ -707,6 +743,25 @@ void VGA16Controller::rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rec
                                          );
 }
 
+volatile uint16_t * IRAM_ATTR VGA16Controller::getSignalsForScanline(int scanLine) {
+  // auto currentItem = m_signalList;
+
+  // while (scanLine > currentItem->endRow) {
+  //   currentItem = currentItem->next;
+  // }
+
+  // return (volatile uint16_t *) currentItem->signals;
+
+
+  if (scanLine < m_currentSignalItem->endRow) {
+    return (volatile uint16_t *) m_currentSignalItem->signals;
+  }
+  while (m_currentSignalItem->next && scanLine >= m_currentSignalItem->endRow) {
+    m_currentSignalItem = m_currentSignalItem->next;
+  }
+  return (volatile uint16_t *) m_currentSignalItem->signals;
+}
+
 
 void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
 {
@@ -726,17 +781,19 @@ void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
 
     auto const width  = ctrl->m_viewPortWidth;
     auto const height = ctrl->m_viewPortHeight;
-    auto const packedPaletteIndexPair_to_signals = (uint16_t const *) ctrl->m_packedPaletteIndexPair_to_signals;
-    auto const lines  = ctrl->m_lines;
-
     int scanLine = (s_scanLine + VGA16_LinesCount / 2) % height;
+    if (scanLine == 0) {
+      ctrl->m_currentSignalItem = ctrl->m_signalList;
+    }
 
+    auto const lines  = ctrl->m_lines;
     auto lineIndex = scanLine & (VGA16_LinesCount - 1);
 
     for (int i = 0; i < VGA16_LinesCount / 2; ++i) {
 
       auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
       auto dest = (uint16_t*) lines[lineIndex];
+      auto const packedPaletteIndexPair_to_signals = ctrl->getSignalsForScanline(scanLine);
       uint8_t* decpix = (uint8_t*) dest;
 
       // optimization warn: horizontal resolution must be a multiple of 16!

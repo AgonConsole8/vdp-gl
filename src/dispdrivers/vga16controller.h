@@ -39,6 +39,7 @@
 #include <stddef.h>
 #include <atomic>
 #include <functional>
+#include <unordered_map>
 
 #include "driver/gpio.h"
 
@@ -85,6 +86,7 @@ class VGA16Controller : public VGAPalettedController {
 public:
 
   VGA16Controller();
+  ~VGA16Controller();
 
   // unwanted methods
   VGA16Controller(VGA16Controller const&) = delete;
@@ -120,6 +122,8 @@ protected:
 
 
 private:
+
+  void packSignals(int index, uint8_t packed222, volatile uint16_t * signals);
 
   // methods to get lambdas to get/set pixels
   std::function<uint8_t(RGB888 const &)> getPixelLambda(PaintMode mode);
@@ -210,12 +214,22 @@ private:
   // abstract method of BitmappedDisplayController
   int getBitmapSavePixelSize() { return 1; }
 
+  volatile uint16_t * getSignalsForScanline(int scanline);
+
   static void ISRHandler(void * arg);
 
 
   static VGA16Controller *    s_instance;
 
-  volatile uint16_t           m_packedPaletteIndexPair_to_signals[256];
+  // volatile uint16_t           m_packedPaletteIndexPair_to_signals[256];
+  // volatile uint16_t           m_packedPaletteIndexPair_to_signalsAlt[256];
+  // volatile uint16_t *         m_packedPaletteIndexPair_to_signals;
+  // volatile uint16_t *         m_packedPaletteIndexPair_to_signalsAlt;
+
+  std::unordered_map<uint16_t, volatile uint16_t *>     m_packedPaletteIndexPair_to_signalsList;
+
+  PaletteListItem *           m_signalList;
+  PaletteListItem *           m_currentSignalItem;
 
 };
 

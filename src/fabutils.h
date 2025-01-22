@@ -1749,6 +1749,17 @@ inline bool isGUI(VirtualKey value)
 #define ASCII_DEL   0x7F   // Delete
 
 
+
+///////////////////////////////////////////////////////////////////////////////////
+// Scan-out palette control
+
+struct PaletteListItem {
+  uint16_t          endRow = 65535;
+  void *            signals;
+  PaletteListItem * next = NULL;
+};
+
+
 } // end of namespace
 
 
