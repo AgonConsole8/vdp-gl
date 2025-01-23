@@ -114,15 +114,15 @@ VGA16Controller::VGA16Controller()
   s_instance = this;
   m_packedPaletteIndexPair_to_signalsList[0] = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
   m_packedPaletteIndexPair_to_signalsList[1] = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-  // m_packedPaletteIndexPair_to_signals = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-  // m_packedPaletteIndexPair_to_signalsAlt = (uint16_t *) heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 
-  m_signalList = (PaletteListItem *) heap_caps_malloc(sizeof(PaletteListItem), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-  m_signalList->signals = (void *) m_packedPaletteIndexPair_to_signalsList[0];
-  m_signalList->endRow = 128;
-  m_signalList->next = (PaletteListItem *) heap_caps_malloc(sizeof(PaletteListItem), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-  auto next = m_signalList->next;
-  next->signals = (void *) m_packedPaletteIndexPair_to_signalsList[1];
+  uint16_t signalList[4] = { 128, 0, 140, 1 };
+  m_signalList = createSignalList(signalList, 2);
+
+  uint16_t altSignalList[8] = { 128, 0, 128, 1, 128, 0, 128, 1 };
+
+  updateSignalList(altSignalList, 4);
+  uint16_t altSignalList2[6] = { 128, 0, 128, 1, 128, 0 };
+  updateSignalList(altSignalList2, 3);
 
   m_currentSignalItem = m_signalList;
 }
@@ -130,14 +130,13 @@ VGA16Controller::VGA16Controller()
 
 VGA16Controller::~VGA16Controller()
 {
+  deleteSignalList(m_signalList);
   for (auto it = m_packedPaletteIndexPair_to_signalsList.begin(); it != m_packedPaletteIndexPair_to_signalsList.end();) {
     if (it->second) {
       heap_caps_free((void *)it->second);
     }
     it = m_packedPaletteIndexPair_to_signalsList.erase(it);
   }
-  // heap_caps_free((void *)m_packedPaletteIndexPair_to_signals);
-  // heap_caps_free((void *)m_packedPaletteIndexPair_to_signalsAlt);
 }
 
 
@@ -156,14 +155,11 @@ void VGA16Controller::setPaletteItem(int index, RGB888 const & color)
   m_palette[index] = color;
   auto packed222 = RGB888toPackedRGB222(color);
 
-  // packSignals(index, packed222, m_packedPaletteIndexPair_to_signals);
   packSignals(index, packed222, m_packedPaletteIndexPair_to_signalsList[0]);
-  // packSignals(index ^ 0x0F, packed222, m_packedPaletteIndexPair_to_signalsAlt);
-  // packSignals(index, packed222 ^ 0x77, m_packedPaletteIndexPair_to_signalsAlt);
   packSignals(index, packed222 ^ 0x77, m_packedPaletteIndexPair_to_signalsList[1]);
 }
 
-void VGA16Controller::packSignals(int index, uint8_t packed222, volatile uint16_t * signals)
+void VGA16Controller::packSignals(int index, uint8_t packed222, uint16_t * signals)
 {
   for (int i = 0; i < 16; ++i) {
     signals[(index << 4) | i] &= 0xFF00;
@@ -171,6 +167,76 @@ void VGA16Controller::packSignals(int index, uint8_t packed222, volatile uint16_
     signals[(i << 4) | index] &= 0x00FF;
     signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
   }
+}
+
+
+void VGA16Controller::deleteSignalList(PaletteListItem * item) {
+  if (item) {
+    deleteSignalList(item->next);
+    heap_caps_free(item);
+  }
+}
+
+
+void VGA16Controller::updateSignalList(uint16_t * rawList, int entries) {
+  // Walk list, updating existing signal list
+  // creating new list if we exceed the current list,
+  // deleting any remaining items if we have fewer entries
+  PaletteListItem * item = m_signalList;
+  int row = 0;
+
+  while (entries) {
+    auto rows = rawList[0];
+    auto paletteID = rawList[1];
+    rawList += 2;
+
+    row += rows;
+    item->endRow = row;
+    if (m_packedPaletteIndexPair_to_signalsList.find(paletteID) != m_packedPaletteIndexPair_to_signalsList.end()) {
+      item->signals = m_packedPaletteIndexPair_to_signalsList[paletteID];
+    } else {
+      item->signals = m_packedPaletteIndexPair_to_signalsList[0];
+    }
+
+    entries--;
+
+    if (entries) {
+      if (item->next) {
+        item = item->next;
+      } else {
+        item->next = createSignalList(rawList, entries, row);
+        return;
+      }
+    }
+  }
+
+  if (item->next) {
+    deleteSignalList(item->next);
+    item->next = NULL;
+  }
+}
+
+
+PaletteListItem * VGA16Controller::createSignalList(uint16_t * rawList, int entries, int row) {
+  PaletteListItem * item = (PaletteListItem *) heap_caps_malloc(sizeof(PaletteListItem), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  auto rows = rawList[0];
+  auto paletteID = rawList[1];
+
+  item->endRow = row + rows;
+
+  if (m_packedPaletteIndexPair_to_signalsList.find(paletteID) != m_packedPaletteIndexPair_to_signalsList.end()) {
+    item->signals = m_packedPaletteIndexPair_to_signalsList[paletteID];
+  } else {
+    item->signals = m_packedPaletteIndexPair_to_signalsList[0];
+  }
+
+  if (entries > 1) {
+    item->next = createSignalList(rawList + 2, entries - 1, row + rows);
+  } else {
+    item->next = NULL;
+  }
+
+  return item;
 }
 
 
@@ -743,23 +809,14 @@ void VGA16Controller::rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rec
                                          );
 }
 
-volatile uint16_t * IRAM_ATTR VGA16Controller::getSignalsForScanline(int scanLine) {
-  // auto currentItem = m_signalList;
-
-  // while (scanLine > currentItem->endRow) {
-  //   currentItem = currentItem->next;
-  // }
-
-  // return (volatile uint16_t *) currentItem->signals;
-
-
+uint16_t * IRAM_ATTR VGA16Controller::getSignalsForScanline(int scanLine) {
   if (scanLine < m_currentSignalItem->endRow) {
-    return (volatile uint16_t *) m_currentSignalItem->signals;
+    return (uint16_t *) m_currentSignalItem->signals;
   }
-  while (m_currentSignalItem->next && scanLine >= m_currentSignalItem->endRow) {
+  while (m_currentSignalItem->next && (scanLine >= m_currentSignalItem->endRow)) {
     m_currentSignalItem = m_currentSignalItem->next;
   }
-  return (volatile uint16_t *) m_currentSignalItem->signals;
+  return (uint16_t *) m_currentSignalItem->signals;
 }
 
 

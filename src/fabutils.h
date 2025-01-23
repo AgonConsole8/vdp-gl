@@ -1754,9 +1754,9 @@ inline bool isGUI(VirtualKey value)
 // Scan-out palette control
 
 struct PaletteListItem {
-  uint16_t          endRow = 65535;
+  uint16_t          endRow;
   void *            signals;
-  PaletteListItem * next = NULL;
+  PaletteListItem * next;
 };
 
 
