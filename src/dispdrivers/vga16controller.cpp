@@ -109,69 +109,16 @@ VGA16Controller * VGA16Controller::s_instance = nullptr;
 
 
 VGA16Controller::VGA16Controller()
-  : VGAPalettedController(VGA16_LinesCount, VGA16_COLUMNSQUANTUM, NativePixelFormat::PALETTE16, 2, 1, ISRHandler)
+  : VGAPalettedController(VGA16_LinesCount, VGA16_COLUMNSQUANTUM, NativePixelFormat::PALETTE16, 2, 1, ISRHandler, 256 * sizeof(uint16_t))
 {
   s_instance = this;
-  createPalette(0);
-
-  uint16_t signalList[2] = { 0, 0 };
-  m_signalList = createSignalList(signalList, 1);
-  m_currentSignalItem = m_signalList;
 }
 
 
 VGA16Controller::~VGA16Controller()
 {
-  deleteSignalList(m_signalList);
-  for (auto it = m_packedPaletteIndexPair_to_signalsList.begin(); it != m_packedPaletteIndexPair_to_signalsList.end();) {
-    if (it->second) {
-      heap_caps_free((void *)it->second);
-    }
-    it = m_packedPaletteIndexPair_to_signalsList.erase(it);
-  }
+  s_instance = nullptr;
 }
-
-
-bool VGA16Controller::createPalette(uint16_t paletteId)
-{
-  if (m_packedPaletteIndexPair_to_signalsList.find(paletteId) == m_packedPaletteIndexPair_to_signalsList.end()) {
-    m_packedPaletteIndexPair_to_signalsList[paletteId] = heap_caps_malloc(256 * sizeof(uint16_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-    if (!m_packedPaletteIndexPair_to_signalsList[paletteId]) {
-      m_packedPaletteIndexPair_to_signalsList.erase(paletteId);
-      // create failed
-      return false;
-    }
-    if (paletteId == 0) {
-      return true;
-    }
-  }
-  // Duplicate palette 0 into new palette
-  if (paletteId != 0) {
-    memcpy(m_packedPaletteIndexPair_to_signalsList[paletteId], m_packedPaletteIndexPair_to_signalsList[0], 256 * sizeof(uint16_t));
-  }
-  return true;
-}
-
-
-void VGA16Controller::deletePalette(uint16_t paletteId)
-{
-  if (paletteId == 0) {
-    return;
-  }
-  if (m_packedPaletteIndexPair_to_signalsList.find(paletteId) != m_packedPaletteIndexPair_to_signalsList.end()) {
-    auto signals = m_packedPaletteIndexPair_to_signalsList[paletteId];
-    auto signalItem = m_signalList;
-    while (signalItem) {
-      if (signalItem->signals == signals) {
-        signalItem->signals = m_packedPaletteIndexPair_to_signalsList[0];
-      }
-      signalItem = signalItem->next;
-    }
-    heap_caps_free(m_packedPaletteIndexPair_to_signalsList[paletteId]);
-    m_packedPaletteIndexPair_to_signalsList.erase(paletteId);
-  }
-}
-
 
 void VGA16Controller::setupDefaultPalette()
 {
@@ -190,7 +137,7 @@ void VGA16Controller::setPaletteItem(int index, RGB888 const & color)
 
 void VGA16Controller::setItemInPalette(uint16_t paletteId, int index, RGB888 const & color)
 {
-  if (m_packedPaletteIndexPair_to_signalsList.find(paletteId) == m_packedPaletteIndexPair_to_signalsList.end()) {
+  if (m_signalMaps.find(paletteId) == m_signalMaps.end()) {
     if (!createPalette(paletteId)) {
       return;
     }
@@ -201,7 +148,7 @@ void VGA16Controller::setItemInPalette(uint16_t paletteId, int index, RGB888 con
   }
   auto packed222 = RGB888toPackedRGB222(color);
 
-  packSignals(index, packed222, (uint16_t *) m_packedPaletteIndexPair_to_signalsList[paletteId]);
+  packSignals(index, packed222, (uint16_t *) m_signalMaps[paletteId]);
 }
 
 
@@ -213,79 +160,6 @@ void VGA16Controller::packSignals(int index, uint8_t packed222, uint16_t * signa
     signals[(i << 4) | index] &= 0x00FF;
     signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
   }
-}
-
-
-void VGA16Controller::deleteSignalList(PaletteListItem * item)
-{
-  if (item) {
-    deleteSignalList(item->next);
-    heap_caps_free(item);
-  }
-}
-
-
-void VGA16Controller::updateSignalList(uint16_t * rawList, int entries)
-{
-  // Walk list, updating existing signal list
-  // creating new list if we exceed the current list,
-  // deleting any remaining items if we have fewer entries
-  PaletteListItem * item = m_signalList;
-  int row = 0;
-
-  while (entries) {
-    auto rows = rawList[0];
-    auto paletteID = rawList[1];
-    rawList += 2;
-
-    row += rows;
-    item->endRow = row;
-    if (m_packedPaletteIndexPair_to_signalsList.find(paletteID) != m_packedPaletteIndexPair_to_signalsList.end()) {
-      item->signals = m_packedPaletteIndexPair_to_signalsList[paletteID];
-    } else {
-      item->signals = m_packedPaletteIndexPair_to_signalsList[0];
-    }
-
-    entries--;
-
-    if (entries) {
-      if (item->next) {
-        item = item->next;
-      } else {
-        item->next = createSignalList(rawList, entries, row);
-        return;
-      }
-    }
-  }
-
-  if (item->next) {
-    deleteSignalList(item->next);
-    item->next = NULL;
-  }
-}
-
-
-PaletteListItem * VGA16Controller::createSignalList(uint16_t * rawList, int entries, int row)
-{
-  PaletteListItem * item = (PaletteListItem *) heap_caps_malloc(sizeof(PaletteListItem), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-  auto rows = rawList[0];
-  auto paletteID = rawList[1];
-
-  item->endRow = row + rows;
-
-  if (m_packedPaletteIndexPair_to_signalsList.find(paletteID) != m_packedPaletteIndexPair_to_signalsList.end()) {
-    item->signals = m_packedPaletteIndexPair_to_signalsList[paletteID];
-  } else {
-    item->signals = m_packedPaletteIndexPair_to_signalsList[0];
-  }
-
-  if (entries > 1) {
-    item->next = createSignalList(rawList + 2, entries - 1, row + rows);
-  } else {
-    item->next = NULL;
-  }
-
-  return item;
 }
 
 

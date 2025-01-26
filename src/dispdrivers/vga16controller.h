@@ -39,7 +39,6 @@
 #include <stddef.h>
 #include <atomic>
 #include <functional>
-#include <unordered_map>
 
 #include "driver/gpio.h"
 
@@ -104,20 +103,6 @@ public:
 
 
   /**
-   * @brief Creates a new palette (signal block) with a 16-bit ID, copying the default palette
-   * 
-   * @param paletteId ID of the new palette
-   */
-  bool createPalette(uint16_t paletteId);
-
-
-  /**
-   * @brief Deletes a palette (signal block) with a 16-bit ID
-   */
-  void deletePalette(uint16_t paletteId);
-
-
-  /**
    * @brief Determines color of specified palette item
    *
    * @param index Palette item (0..15)
@@ -141,19 +126,6 @@ public:
   void setItemInPalette(uint16_t paletteId, int index, RGB888 const & color);
 
 
-  // we need APIs to create/change/delete supplementary palettes
-  // which will use a 16-bit ID for selection/reference
-  // plus to delete them, which should remove them from current signal list
-
-  /**
-   * @brief Creates a new signal list based off simple pairs of row count and palette ID
-   * 
-   * @param rawList List of row count and palette ID pairs
-   * @param entries Number of entries in the list
-   */
-  void updateSignalList(uint16_t * rawList, int entries);
-
-
 protected:
 
   void setupDefaultPalette();
@@ -162,9 +134,6 @@ protected:
 private:
 
   void packSignals(int index, uint8_t packed222, uint16_t * signals);
-
-  PaletteListItem * createSignalList(uint16_t * rawList, int entries, int row = 0);
-  void deleteSignalList(PaletteListItem * item);
 
   // methods to get lambdas to get/set pixels
   std::function<uint8_t(RGB888 const &)> getPixelLambda(PaintMode mode);
@@ -261,12 +230,6 @@ private:
 
 
   static VGA16Controller *    s_instance;
-
-  // TODO rename this as it's awkward - name is confusingly similar to the signal generation list
-  std::unordered_map<uint16_t, void *>     m_packedPaletteIndexPair_to_signalsList;
-
-  PaletteListItem *           m_signalList;
-  PaletteListItem *           m_currentSignalItem;
 
 };
 

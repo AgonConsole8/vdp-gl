@@ -38,6 +38,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <atomic>
+#include <unordered_map>
 
 #include "driver/gpio.h"
 
@@ -67,7 +68,7 @@ class VGAPalettedController : public VGABaseController {
 
 public:
 
-  VGAPalettedController(int linesCount, int columnsQuantum, NativePixelFormat nativePixelFormat, int viewPortRatioDiv, int viewPortRatioMul, intr_handler_t isrHandler);
+  VGAPalettedController(int linesCount, int columnsQuantum, NativePixelFormat nativePixelFormat, int viewPortRatioDiv, int viewPortRatioMul, intr_handler_t isrHandler, int signalTableSize = 0);
   ~VGAPalettedController();
 
   // unwanted methods
@@ -110,6 +111,30 @@ public:
   // Should be called after the palette is updated.
   void updateRGB2PaletteLUT();
 
+  /**
+   * @brief Creates a new palette (signal block) with a 16-bit ID, copying the default palette
+   * 
+   * @param paletteId ID of the new palette
+   */
+  bool createPalette(uint16_t paletteId);
+
+
+  /**
+   * @brief Deletes a palette (signal block) with a 16-bit ID
+   */
+  void deletePalette(uint16_t paletteId);
+
+
+  /**
+   * @brief Creates a new signal list based off simple pairs of row count and palette ID
+   * 
+   * @param rawList List of row count and palette ID pairs
+   * @param entries Number of entries in the list
+   */
+  void updateSignalList(uint16_t * rawList, int entries);
+
+
+
 protected:
 
   void init();
@@ -134,6 +159,14 @@ protected:
 
   RGB222 *                    m_palette;
 
+  int                         m_signalTableSize;
+
+  // signal maps for mapping framebuffer data into signals for a given palette ID
+  std::unordered_map<uint16_t, void *>     m_signalMaps;
+
+  PaletteListItem *           m_signalList;
+  PaletteListItem *           m_currentSignalItem;
+
 
 private:
 
@@ -141,6 +174,9 @@ private:
   void freeViewPort();
   void checkViewPortSize();
   void onSetupDMABuffer(lldesc_t volatile * buffer, bool isStartOfVertFrontPorch, int scan, bool isVisible, int visibleRow);
+
+  PaletteListItem * createSignalList(uint16_t * rawList, int entries, int row = 0);
+  void deleteSignalList(PaletteListItem * item);
 
   uint8_t                     m_packedRGB222_to_PaletteIndex[64];
 
