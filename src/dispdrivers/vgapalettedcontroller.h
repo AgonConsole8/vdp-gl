@@ -124,6 +124,28 @@ public:
    */
   void deletePalette(uint16_t paletteId);
 
+  /**
+   * @brief Sets color of specified palette item in default palette
+   *
+   * @param index Palette item (0..<palette size>)
+   * @param color Color to assign to this item
+   *
+   * Example:
+   *
+   *     // Color item 0 is pure Red
+   *     displayController.setPaletteItem(0, RGB888(255, 0, 0));
+   */
+  void setPaletteItem(int index, RGB888 const & color);
+
+  /**
+   * @brief Sets color of specified palette item in a given palette
+   * 
+   * @param paletteId ID of the palette
+   * @param index Index of the item in the palette
+   * @param color Color to assign to this item
+   */
+  void setItemInPalette(uint16_t paletteId, int index, RGB888 const & color);
+
 
   /**
    * @brief Creates a new signal list based off simple pairs of row count and palette ID
@@ -155,6 +177,10 @@ protected:
 
   // abstract method of BitmappedDisplayController
   void swapBuffers();
+
+  virtual void packSignals(int index, uint8_t packed222, void * signals) = 0;
+
+  void * getSignalsForScanline(int scanline);
 
 
   RGB222 *                    m_palette;

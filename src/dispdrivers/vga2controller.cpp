@@ -91,16 +91,15 @@ VGA2Controller * VGA2Controller::s_instance = nullptr;
 
 
 VGA2Controller::VGA2Controller()
-  : VGAPalettedController(VGA2_LinesCount, VGA2_COLUMNSQUANTUM, NativePixelFormat::PALETTE2, 8, 1, ISRHandler)
+  : VGAPalettedController(VGA2_LinesCount, VGA2_COLUMNSQUANTUM, NativePixelFormat::PALETTE2, 8, 1, ISRHandler, 256 * sizeof(uint64_t))
 {
   s_instance = this;
-  m_packedPaletteIndexOctet_to_signals = (uint64_t *) heap_caps_malloc(256 * sizeof(uint64_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 }
 
 
 VGA2Controller::~VGA2Controller()
 {
-  heap_caps_free((void *)m_packedPaletteIndexOctet_to_signals);
+  s_instance = nullptr;
 }
 
 
@@ -111,13 +110,11 @@ void VGA2Controller::setupDefaultPalette()
 }
 
 
-void VGA2Controller::setPaletteItem(int index, RGB888 const & color)
+void VGA2Controller::packSignals(int index, uint8_t packed222, void * signals)
 {
-  index %= 2;
-  m_palette[index] = color;
-  auto packed222 = RGB888toPackedRGB222(color);
+  auto _signals = (uint64_t *) signals;
   for (int i = 0; i < 256; ++i) {
-    auto b = (uint8_t *) (m_packedPaletteIndexOctet_to_signals + i);
+    auto b = (uint8_t *) (_signals + i);
     for (int j = 0; j < 8; ++j) {
       auto aj = 7 - j;
       if ((index == 0 && ((1 << aj) & i) == 0) || (index == 1 && ((1 << aj) & i) != 0)) {
@@ -709,11 +706,12 @@ void IRAM_ATTR VGA2Controller::ISRHandler(void * arg)
 
     auto const width  = ctrl->m_viewPortWidth;
     auto const height = ctrl->m_viewPortHeight;
-    auto const packedPaletteIndexOctet_to_signals = (uint64_t const *) ctrl->m_packedPaletteIndexOctet_to_signals;
-    auto const lines  = ctrl->m_lines;
-
     int scanLine = (s_scanLine + VGA2_LinesCount / 2) % height;
+    if (scanLine == 0) {
+      ctrl->m_currentSignalItem = ctrl->m_signalList;
+    }
 
+    auto const lines  = ctrl->m_lines;
     auto lineIndex = scanLine & (VGA2_LinesCount - 1);
 
     for (int i = 0; i < VGA2_LinesCount / 2; ++i) {
@@ -721,6 +719,7 @@ void IRAM_ATTR VGA2Controller::ISRHandler(void * arg)
       auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
       auto dest = (uint64_t*) lines[lineIndex];
       uint8_t* decpix = (uint8_t*) dest;
+      auto const packedPaletteIndexOctet_to_signals = (uint64_t *) ctrl->getSignalsForScanline(scanLine);
 
       // optimization warn: horizontal resolution must be a multiple of 16!
       for (int col = 0; col < width; col += 16) {

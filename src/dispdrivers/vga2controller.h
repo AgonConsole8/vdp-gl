@@ -102,23 +102,12 @@ public:
 
   void readScreen(Rect const & rect, RGB888 * destBuf);
 
-  /**
-   * @brief Determines color of specified palette item
-   *
-   * @param index Palette item (0..1)
-   * @param color Color to assign to this item
-   *
-   * Example:
-   *
-   *     // Color item 0 is pure Red
-   *     displayController.setPaletteItem(0, RGB888(255, 0, 0));
-   */
-  void setPaletteItem(int index, RGB888 const & color);
-
 
 protected:
 
   void setupDefaultPalette();
+
+  void packSignals(int index, uint8_t packed222, void * signals);
 
 
 private:
@@ -217,8 +206,6 @@ private:
 
 
   static VGA2Controller *     s_instance;
-
-  volatile uint64_t *         m_packedPaletteIndexOctet_to_signals;
 
 };
 

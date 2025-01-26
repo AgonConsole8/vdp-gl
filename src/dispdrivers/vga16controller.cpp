@@ -120,6 +120,7 @@ VGA16Controller::~VGA16Controller()
   s_instance = nullptr;
 }
 
+
 void VGA16Controller::setupDefaultPalette()
 {
   for (int colorIndex = 0; colorIndex < 16; ++colorIndex) {
@@ -129,36 +130,14 @@ void VGA16Controller::setupDefaultPalette()
 }
 
 
-void VGA16Controller::setPaletteItem(int index, RGB888 const & color)
+void VGA16Controller::packSignals(int index, uint8_t packed222, void * signals)
 {
-  setItemInPalette(0, index, color);
-}
-
-
-void VGA16Controller::setItemInPalette(uint16_t paletteId, int index, RGB888 const & color)
-{
-  if (m_signalMaps.find(paletteId) == m_signalMaps.end()) {
-    if (!createPalette(paletteId)) {
-      return;
-    }
-  }
-  index %= 16;
-  if (paletteId == 0) {
-    m_palette[index] = color;
-  }
-  auto packed222 = RGB888toPackedRGB222(color);
-
-  packSignals(index, packed222, (uint16_t *) m_signalMaps[paletteId]);
-}
-
-
-void VGA16Controller::packSignals(int index, uint8_t packed222, uint16_t * signals)
-{
+  auto _signals = (uint16_t *) signals;
   for (int i = 0; i < 16; ++i) {
-    signals[(index << 4) | i] &= 0xFF00;
-    signals[(index << 4) | i] |= (m_HVSync | packed222);
-    signals[(i << 4) | index] &= 0x00FF;
-    signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
+    _signals[(index << 4) | i] &= 0xFF00;
+    _signals[(index << 4) | i] |= (m_HVSync | packed222);
+    _signals[(i << 4) | index] &= 0x00FF;
+    _signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
   }
 }
 
@@ -732,16 +711,6 @@ void VGA16Controller::rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rec
                                          );
 }
 
-uint16_t * IRAM_ATTR VGA16Controller::getSignalsForScanline(int scanLine) {
-  if (scanLine < m_currentSignalItem->endRow) {
-    return (uint16_t *) m_currentSignalItem->signals;
-  }
-  while (m_currentSignalItem->next && (scanLine >= m_currentSignalItem->endRow)) {
-    m_currentSignalItem = m_currentSignalItem->next;
-  }
-  return (uint16_t *) m_currentSignalItem->signals;
-}
-
 
 void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
 {
@@ -773,8 +742,8 @@ void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
 
       auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
       auto dest = (uint16_t*) lines[lineIndex];
-      auto const packedPaletteIndexPair_to_signals = ctrl->getSignalsForScanline(scanLine);
       uint8_t* decpix = (uint8_t*) dest;
+      auto const packedPaletteIndexPair_to_signals = (uint16_t *) ctrl->getSignalsForScanline(scanLine);
 
       // optimization warn: horizontal resolution must be a multiple of 16!
       for (int col = 0; col < width; col += 16) {

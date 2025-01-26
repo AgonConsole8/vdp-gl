@@ -201,6 +201,28 @@ int VGAPalettedController::getPaletteSize()
   }
 }
 
+void VGAPalettedController::setPaletteItem(int index, RGB888 const & color)
+{
+  setItemInPalette(0, index, color);
+}
+
+
+void VGAPalettedController::setItemInPalette(uint16_t paletteId, int index, RGB888 const & color)
+{
+  if (m_signalMaps.find(paletteId) == m_signalMaps.end()) {
+    if (!createPalette(paletteId)) {
+      return;
+    }
+  }
+  index %= getPaletteSize();
+  if (paletteId == 0) {
+    m_palette[index] = color;
+  }
+  auto packed222 = RGB888toPackedRGB222(color);
+  packSignals(index, packed222, m_signalMaps[paletteId]);
+}
+
+
 
 // rebuild m_packedRGB222_to_PaletteIndex
 void VGAPalettedController::updateRGB2PaletteLUT()
@@ -346,6 +368,17 @@ PaletteListItem * VGAPalettedController::createSignalList(uint16_t * rawList, in
   }
 
   return item;
+}
+
+
+void * IRAM_ATTR VGAPalettedController::getSignalsForScanline(int scanLine) {
+  if (scanLine < m_currentSignalItem->endRow) {
+    return m_currentSignalItem->signals;
+  }
+  while (m_currentSignalItem->next && (scanLine >= m_currentSignalItem->endRow)) {
+    m_currentSignalItem = m_currentSignalItem->next;
+  }
+  return m_currentSignalItem->signals;
 }
 
 

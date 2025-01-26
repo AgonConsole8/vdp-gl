@@ -102,38 +102,13 @@ public:
   void readScreen(Rect const & rect, RGB888 * destBuf);
 
 
-  /**
-   * @brief Determines color of specified palette item
-   *
-   * @param index Palette item (0..15)
-   * @param color Color to assign to this item
-   *
-   * Example:
-   *
-   *     // Color item 0 is pure Red
-   *     displayController.setPaletteItem(0, RGB888(255, 0, 0));
-   */
-  void setPaletteItem(int index, RGB888 const & color);
-
-
-  /**
-   * @brief Sets color of specified palette item in a given palette
-   * 
-   * @param paletteId ID of the palette
-   * @param index Index of the item in the palette
-   * @param color Color to assign to this item
-   */
-  void setItemInPalette(uint16_t paletteId, int index, RGB888 const & color);
-
-
 protected:
 
   void setupDefaultPalette();
 
+  void packSignals(int index, uint8_t packed222, void * signals);
 
 private:
-
-  void packSignals(int index, uint8_t packed222, uint16_t * signals);
 
   // methods to get lambdas to get/set pixels
   std::function<uint8_t(RGB888 const &)> getPixelLambda(PaintMode mode);
@@ -223,8 +198,6 @@ private:
 
   // abstract method of BitmappedDisplayController
   int getBitmapSavePixelSize() { return 1; }
-
-  uint16_t * getSignalsForScanline(int scanline);
 
   static void ISRHandler(void * arg);
 
