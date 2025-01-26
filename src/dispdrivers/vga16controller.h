@@ -102,6 +102,21 @@ public:
 
   void readScreen(Rect const & rect, RGB888 * destBuf);
 
+
+  /**
+   * @brief Creates a new palette (signal block) with a 16-bit ID, copying the default palette
+   * 
+   * @param paletteId ID of the new palette
+   */
+  bool createPalette(uint16_t paletteId);
+
+
+  /**
+   * @brief Deletes a palette (signal block) with a 16-bit ID
+   */
+  void deletePalette(uint16_t paletteId);
+
+
   /**
    * @brief Determines color of specified palette item
    *
@@ -114,6 +129,16 @@ public:
    *     displayController.setPaletteItem(0, RGB888(255, 0, 0));
    */
   void setPaletteItem(int index, RGB888 const & color);
+
+
+  /**
+   * @brief Sets color of specified palette item in a given palette
+   * 
+   * @param paletteId ID of the palette
+   * @param index Index of the item in the palette
+   * @param color Color to assign to this item
+   */
+  void setItemInPalette(uint16_t paletteId, int index, RGB888 const & color);
 
 
   // we need APIs to create/change/delete supplementary palettes
@@ -238,7 +263,7 @@ private:
   static VGA16Controller *    s_instance;
 
   // TODO rename this as it's awkward - name is confusingly similar to the signal generation list
-  std::unordered_map<uint16_t, uint16_t *>     m_packedPaletteIndexPair_to_signalsList;
+  std::unordered_map<uint16_t, void *>     m_packedPaletteIndexPair_to_signalsList;
 
   PaletteListItem *           m_signalList;
   PaletteListItem *           m_currentSignalItem;
