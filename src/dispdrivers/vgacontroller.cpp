@@ -134,6 +134,7 @@ void IRAM_ATTR VGAController::VSyncInterrupt(void * arg)
     auto VGACtrl = (VGAController*)arg;
     int64_t startTime = VGACtrl->backgroundPrimitiveTimeoutEnabled() ? esp_timer_get_time() : 0;
     Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
+    VGACtrl->frameCounter++;
     do {
       Primitive prim;
       if (VGACtrl->getPrimitiveISR(&prim) == false)

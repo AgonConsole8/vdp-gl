@@ -288,6 +288,9 @@ public:
 
   uint8_t createBlankRawPixel()                  { return m_HVSync; }
 
+  uint     frameCounter = 0;
+
+
 protected:
 
   static void setupGPIO(gpio_num_t gpio, int bit, gpio_mode_t mode);
