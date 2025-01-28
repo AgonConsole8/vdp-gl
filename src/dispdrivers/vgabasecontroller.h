@@ -289,6 +289,7 @@ public:
 
   uint8_t createBlankRawPixel()                  { return m_HVSync; }
 
+  int     frameCounter;
 
 
 protected:
