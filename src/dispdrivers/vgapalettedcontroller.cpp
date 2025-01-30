@@ -150,8 +150,12 @@ void VGAPalettedController::setResolution(VGATimings const& timings, int viewPor
   for (int i = 0; i < m_viewPortHeight; ++i)
     memset((void*)(m_viewPort[i]), nativePixelFormat() == NativePixelFormat::SBGR2222 ? m_HVSync : 0, m_viewPortWidth / m_viewPortRatioDiv * m_viewPortRatioMul);
 
+  deletePalette(65535);
   setupDefaultPalette();
   updateRGB2PaletteLUT();
+
+  uint16_t signalList[2] = { 0, 0 };
+  updateSignalList(signalList, 1);
 
   calculateAvailableCyclesForDrawings();
 
@@ -281,6 +285,13 @@ bool VGAPalettedController::createPalette(uint16_t paletteId)
 void VGAPalettedController::deletePalette(uint16_t paletteId)
 {
   if (paletteId == 0) {
+    return;
+  }
+  if (paletteId == 65535) {
+    // iterate over all palettes and delete them using deletePalette
+    for (auto it = m_signalMaps.begin(); it != m_signalMaps.end(); ++it) {
+      deletePalette(it->first);
+    }
     return;
   }
   if (m_signalMaps.find(paletteId) != m_signalMaps.end()) {
