@@ -495,7 +495,7 @@ const TermInfo term_ANSILegacy = {
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ADDS25 (Maybe ADDS40 - documentation needs confirmation)
+// ADDS25 with ADDS40 highlighting codes based on LSI Host6A documentation
 
 
 // sorted by TermSeq name
@@ -509,26 +509,14 @@ const TermInfoVideoConv videoConv_ADDS25[] = {
   // BS => Cursor Left
   { "\x08", 1, { ConvCtrl::CursorLeft, ConvCtrl::END } },
 
-  // LF => Cursor Down
-  { "\x08", 1, { ConvCtrl::LineFeed, ConvCtrl::END } },
-
-  // VT => Cursor Up
-  { "\x0b", 1, { ConvCtrl::CursorUp, ConvCtrl::END} },
-
   // FF => Erase All
   { "\x0c", 1, { ConvCtrl::CursorHome, ConvCtrl::EraseToEndOfScreen, ConvCtrl::END} },
 
-  //  NAK => Cursor Forward
-  { "\x15", 1, { ConvCtrl::CursorRight, ConvCtrl::END } },
+  //  NAK => Cursor Backward
+  { "\x15", 1, { ConvCtrl::CursorLeft, ConvCtrl::END } },
 
   // SUB => Cursor Up
   { "\x1a", 1, { ConvCtrl::CursorUp, ConvCtrl::END} },
-
-  // RS => Cursor Home
-  { "\x1e", 1, { ConvCtrl::CursorHome, ConvCtrl::END} },
-
-  // US => New line
-  { "\x1f", 1, { ConvCtrl::CarriageReturn, ConvCtrl::LineFeed, ConvCtrl::END} },
 
   // 'ESC Y y x' => Cursor Position (cursorX = x-31, cursorY = y-31)
   { "\eY\xff\xff", 4, { ConvCtrl::CursorPos, ConvCtrl::END} },
@@ -599,6 +587,7 @@ const TermInfoVideoConv videoConv_ADDS25[] = {
 
   // NOT SUPPORTED YET:
   // Back tab
+  // position horizontal (DLE), position vertical (VT)
   // toggle autoscroll on/off
   // enable keyboard
   // disable keyboard
