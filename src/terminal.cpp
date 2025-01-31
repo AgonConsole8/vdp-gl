@@ -2173,6 +2173,9 @@ void Terminal::convSendCtrl(ConvCtrl ctrl, bool fromISR)
       convQueue(s, fromISR);
       break;
     }
+    case ConvCtrl::ToggleCursorOnOff:
+      convQueue(m_prevCursorEnabled?"\e[?25l":"\e[?25h", fromISR);
+      break;
 
     default:
       break;
