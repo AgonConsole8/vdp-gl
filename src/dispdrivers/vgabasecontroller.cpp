@@ -53,6 +53,13 @@ namespace fabgl {
   volatile uint64_t s_vgapalctrlcycles = 0;
 #endif
 
+volatile uint8_t * * VGABaseController::s_viewPort;
+volatile uint8_t * * VGABaseController::s_viewPortVisible;
+lldesc_t volatile *  VGABaseController::s_frameResetDesc;
+volatile int         VGABaseController::s_scanLine;
+volatile int         VGABaseController::s_scanRow;
+volatile int         VGABaseController::s_scanWidth;
+volatile int         VGABaseController::s_viewPortHeight;
 
 
 VGABaseController::VGABaseController()
@@ -391,6 +398,8 @@ void VGABaseController::setResolution(VGATimings const& timings, int viewPortWid
   m_viewPortRow = m_viewPortRow & ~3;
 
   m_rawFrameHeight = m_timings.VVisibleArea + m_timings.VFrontPorch + m_timings.VSyncPulse + m_timings.VBackPorch;
+  s_scanWidth = m_viewPortWidth;
+  s_viewPortHeight = m_viewPortHeight;
 
   // allocate DMA descriptors
   setDMABuffersCount(calcRequiredDMABuffersCount(m_viewPortHeight));
@@ -754,6 +763,10 @@ void IRAM_ATTR VGABaseController::swapBuffers()
 }
 
 
+// Chance to overwrite a scan line in the output DMA buffer.
+void IRAM_ATTR VGABaseController::decorateScanLinePixels(uint8_t * pixels) {
+  drawSpriteScanLine(pixels, s_scanRow, s_scanWidth, s_viewPortHeight);
+}
 
 
 } // end of namespace

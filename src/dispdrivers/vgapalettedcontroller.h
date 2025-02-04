@@ -137,16 +137,6 @@ protected:
 
   TaskHandle_t                m_primitiveExecTask;
 
-  volatile uint8_t * *        m_lines;
-
-  // optimization: clones of m_viewPort and m_viewPortVisible
-  static volatile uint8_t * * s_viewPort;
-  static volatile uint8_t * * s_viewPortVisible;
-
-  static lldesc_t volatile *  s_frameResetDesc;
-
-  static volatile int         s_scanLine;
-
   RGB222 *                    m_palette;
 
 

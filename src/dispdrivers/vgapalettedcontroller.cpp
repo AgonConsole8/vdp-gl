@@ -60,14 +60,6 @@ namespace fabgl {
 /* VGAPalettedController definitions */
 
 
-volatile uint8_t * * VGAPalettedController::s_viewPort;
-volatile uint8_t * * VGAPalettedController::s_viewPortVisible;
-lldesc_t volatile *  VGAPalettedController::s_frameResetDesc;
-volatile int         VGAPalettedController::s_scanLine;
-
-
-
-
 VGAPalettedController::VGAPalettedController(int linesCount, int columnsQuantum, NativePixelFormat nativePixelFormat, int viewPortRatioDiv, int viewPortRatioMul, intr_handler_t isrHandler)
   : m_linesCount(linesCount),
     m_columnsQuantum(columnsQuantum),

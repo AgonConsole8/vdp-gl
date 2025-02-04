@@ -167,6 +167,7 @@ Sprite::Sprite()
   visible                 = true;
   isStatic                = false;
   allowDraw               = true;
+  hardware                = false;
   paintOptions            = PaintOptions();
 }
 
@@ -653,6 +654,7 @@ void BitmappedDisplayController::setSprites(Sprite * sprites, int count, int spr
     uint8_t * spritePtr = (uint8_t*)m_sprites;
     for (int i = 0; i < m_spritesCount; ++i, spritePtr += m_spriteSize) {
       Sprite * sprite = (Sprite*) spritePtr;
+      if (sprite->hardware) continue;
       int reqBackBufferSize = 0;
       for (int i = 0; i < sprite->framesCount; ++i)
         reqBackBufferSize = tmax(reqBackBufferSize, sprite->frames[i]->width * getBitmapSavePixelSize() * sprite->frames[i]->height);
@@ -689,7 +691,8 @@ void IRAM_ATTR BitmappedDisplayController::hideSprites(Rect & updateRect)
       // restore saved backgrounds
       for (int i = spritesCount() - 1; i >= 0; --i) {
         Sprite * sprite = getSprite(i);
-        if (sprite->allowDraw && sprite->savedBackgroundWidth > 0) {
+        if (!sprite->hardware &&
+            sprite->allowDraw && sprite->savedBackgroundWidth > 0) {
           int savedX = sprite->savedX;
           int savedY = sprite->savedY;
           int savedWidth  = sprite->savedBackgroundWidth;
@@ -728,7 +731,8 @@ void IRAM_ATTR BitmappedDisplayController::showSprites(Rect & updateRect)
     // save backgrounds and draw sprites
     for (int i = 0; i < spritesCount(); ++i) {
       Sprite * sprite = getSprite(i);
-      if (sprite->visible && sprite->allowDraw && sprite->getFrame()) {
+      if (!sprite->hardware &&
+          sprite->visible && sprite->allowDraw && sprite->getFrame()) {
         // save sprite X and Y so other threads can change them without interferring
         int spriteX = sprite->x;
         int spriteY = sprite->y;
@@ -807,6 +811,52 @@ void BitmappedDisplayController::setMouseCursorPos(int X, int Y)
 {
   m_mouseCursor.moveTo(X - m_mouseHotspotX, Y - m_mouseHotspotY);
   refreshSprites();
+}
+
+
+void BitmappedDisplayController::drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight) {
+    // normal sprites
+    int spritesCnt = spritesCount();
+    for (int i = 0; i < spritesCnt; ++i) {
+      Sprite * sprite = getSprite(i);
+      if (sprite->hardware &&
+          sprite->visible && sprite->allowDraw && sprite->getFrame()) {
+        auto spriteFrame = sprite->getFrame();
+        int spriteWidth = spriteFrame->width;
+        int spriteHeight = spriteFrame->height;
+
+        int spriteY = sprite->y;
+        int spriteYend = spriteY + spriteHeight;
+        if (scanRow < spriteY) continue;
+        if (scanRow >= spriteYend) continue;
+        int offsetY = scanRow - spriteY;
+
+        int spriteX = sprite->x;
+        if (spriteX >= scanWidth) continue;
+        int spriteXend = spriteX + spriteWidth;
+        if (spriteXend <= 0) continue;
+
+        int offsetX = (spriteX < 0 ? -spriteX : 0);
+        int drawWidth =
+          (spriteXend > scanWidth ?
+            scanWidth - spriteX :
+            spriteWidth - offsetX);
+
+        auto src = spriteFrame->data + (offsetY * spriteWidth * 4) + (offsetX * 4);
+        auto pos = spriteX + offsetX;
+
+        while (drawWidth--) {
+          if (src[3]) {
+            auto r = src[0] >> 6;
+            auto g = (src[1] >> 6) << 2;
+            auto b = (src[2] >> 6) << 4;
+            pixelData[pos ^ 2] = r | g | b | m_HVSync;
+          }
+          src += 4;
+          pos++;
+        }
+      }
+    }
 }
 
 
