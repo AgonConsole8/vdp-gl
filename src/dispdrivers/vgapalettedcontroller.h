@@ -159,7 +159,6 @@ private:
   uint8_t                     m_packedRGB222_to_PaletteIndex[64];
 
   // configuration
-  int                         m_linesCount;     // viewport height must be divisible by m_linesCount
   int                         m_columnsQuantum; // viewport width must be divisble by m_columnsQuantum
   NativePixelFormat           m_nativePixelFormat;
   int                         m_viewPortRatioDiv;

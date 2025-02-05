@@ -366,6 +366,7 @@ protected:
   static volatile int         s_scanWidth;
   static volatile int         s_viewPortHeight;
 
+  int                         m_linesCount;     // viewport height must be divisible by m_linesCount
 
 private:
 
