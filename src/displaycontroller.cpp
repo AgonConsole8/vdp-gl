@@ -842,18 +842,38 @@ void BitmappedDisplayController::drawSpriteScanLine(uint8_t * pixelData, int sca
             scanWidth - spriteX :
             spriteWidth - offsetX);
 
-        auto src = spriteFrame->data + (offsetY * spriteWidth * 4) + (offsetX * 4);
         auto pos = spriteX + offsetX;
 
-        while (drawWidth--) {
-          if (src[3]) {
-            auto r = src[0] >> 6;
-            auto g = (src[1] >> 6) << 2;
-            auto b = (src[2] >> 6) << 4;
-            pixelData[pos ^ 2] = r | g | b | m_HVSync;
-          }
-          src += 4;
-          pos++;
+        switch (spriteFrame->format) {
+          case PixelFormat::RGBA8888: {
+              auto src = spriteFrame->data + (offsetY * spriteWidth * 4) + (offsetX * 4);
+
+              while (drawWidth--) {
+                if (src[3]) {
+                  auto r = src[0] >> 6;
+                  auto g = (src[1] >> 6) << 2;
+                  auto b = (src[2] >> 6) << 4;
+                  pixelData[pos ^ 2] = r | g | b | m_HVSync;
+                }
+                src += 4;
+                pos++;
+              }
+            }
+            break;
+
+          case PixelFormat::RGBA2222: {
+              auto src = spriteFrame->data + (offsetY * spriteWidth) + offsetX;
+
+              while (drawWidth--) {
+                if (*src & 0xC0) {
+                  auto rgb = *src & 0x3F;
+                  pixelData[pos ^ 2] = rgb | m_HVSync;
+                }
+                src++;
+                pos++;
+              }
+            }
+            break;
         }
       }
     }
