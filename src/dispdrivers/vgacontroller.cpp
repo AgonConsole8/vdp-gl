@@ -133,6 +133,9 @@ void VGAController::setResolution(VGATimings const& timings, int viewPortWidth, 
 {
   VGABaseController::setResolution(timings, viewPortWidth, viewPortHeight, doubleBuffered);
 
+  s_viewPort        = m_viewPort;
+  s_viewPortVisible = m_viewPortVisible;
+
   // fill view port
   for (int i = 0; i < m_viewPortHeight; ++i)
     fill(m_viewPort[i], 0, m_viewPortWidth, 0, 0, 0, false, false);
@@ -203,9 +206,9 @@ void IRAM_ATTR VGAController::ISRHandler(void * arg)
 
       for (int i = 0; i < VGA64_LinesCount / 2; ++i) {
 
-        auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
+        auto src = (uint8_t const *) s_viewPortVisible[scanLine];
         auto decpix = (uint8_t*) ctrl->m_lines[lineIndex];
-        memset(decpix, ctrl->m_HVSync, width);
+        memset(decpix, 0x10|ctrl->m_HVSync, width);
         ctrl->decorateScanLinePixels(decpix);
 
         ++lineIndex;
