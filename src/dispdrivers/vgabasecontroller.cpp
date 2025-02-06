@@ -80,6 +80,9 @@ void VGABaseController::init()
   m_doubleBufferOverDMA          = false;
   m_viewPort                     = nullptr;
   m_viewPortMemoryPool           = nullptr;
+  m_taskProcessingPrimitives     = false;
+  m_primitiveExecTask            = nullptr;
+  m_processPrimitivesOnBlank     = false;
 
   m_GPIOStream.begin();
 }
@@ -128,6 +131,11 @@ void VGABaseController::end()
       m_isr_handle = nullptr;
     }
     freeBuffers();
+  }
+  if (m_primitiveExecTask) {
+    vTaskDelete(m_primitiveExecTask);
+    m_primitiveExecTask = nullptr;
+    m_taskProcessingPrimitives = false;
   }
 }
 
@@ -339,6 +347,8 @@ bool VGABaseController::convertModelineToTimings(char const * modeline, VGATimin
 void VGABaseController::suspendBackgroundPrimitiveExecution()
 {
   ++m_primitiveProcessingSuspended;
+  while (m_taskProcessingPrimitives)
+    ;
 }
 
 
@@ -421,6 +431,10 @@ void VGABaseController::setResolution(VGATimings const& timings, int viewPortWid
 
   if (m_doubleBufferOverDMA)
     m_DMABuffersHead->qe.stqe_next = (lldesc_t*) &m_DMABuffersVisible[0];
+
+  if (m_primitiveExecTask == nullptr) {
+    xTaskCreatePinnedToCore(primitiveExecTask, "" , FABGLIB_VGAPALETTEDCONTROLLER_PRIMTASK_STACK_SIZE, this, FABGLIB_VGAPALETTEDCONTROLLER_PRIMTASK_PRIORITY, &m_primitiveExecTask, CoreUsage::quietCore());
+  }
 }
 
 
@@ -768,6 +782,52 @@ void IRAM_ATTR VGABaseController::decorateScanLinePixels(uint8_t * pixels) {
   drawSpriteScanLine(pixels, s_scanRow, s_scanWidth, s_viewPortHeight);
 }
 
+// we can use getCycleCount here because primitiveExecTask is pinned to a specific core (so cycle counter is the same)
+// getCycleCount() requires 0.07us, while esp_timer_get_time() requires 0.78us
+void VGABaseController::primitiveExecTask(void * arg)
+{
+  auto ctrl = (VGABaseController *) arg;
+
+  while (true) {
+    if (!ctrl->m_primitiveProcessingSuspended) {
+      auto startCycle = ctrl->backgroundPrimitiveTimeoutEnabled() ? getCycleCount() : 0;
+      Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
+      ctrl->m_taskProcessingPrimitives = true;
+      do {
+        Primitive prim;
+        if (ctrl->getPrimitive(&prim, 0) == false)
+          break;
+        ctrl->execPrimitive(prim, updateRect, false);
+        if (ctrl->m_primitiveProcessingSuspended)
+          break;
+      } while (!ctrl->backgroundPrimitiveTimeoutEnabled() || (startCycle + ctrl->m_primitiveExecTimeoutCycles > getCycleCount()));
+      ctrl->showSprites(updateRect);
+      ctrl->m_taskProcessingPrimitives = false;
+    }
+
+    // wait for vertical sync
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+  }
+
+}
+
+
+// calculates number of CPU cycles usable to draw primitives
+void VGABaseController::calculateAvailableCyclesForDrawings()
+{
+  int availtime_us;
+
+  if (m_processPrimitivesOnBlank) {
+    // allowed time to process primitives is limited to the vertical blank. Slow, but avoid flickering
+    availtime_us = ceil(1000000.0 / m_timings.frequency * m_timings.scanCount * m_HLineSize * (m_linesCount / 2 + m_timings.VFrontPorch + m_timings.VSyncPulse + m_timings.VBackPorch + m_viewPortRow));
+  } else {
+    // allowed time is the half of an entire frame. Fast, but may flick
+    availtime_us = ceil(1000000.0 / m_timings.frequency * m_timings.scanCount * m_HLineSize * (m_timings.VVisibleArea + m_timings.VFrontPorch + m_timings.VSyncPulse + m_timings.VBackPorch));
+    availtime_us /= 2;
+  }
+
+  m_primitiveExecTimeoutCycles = getCPUFrequencyMHz() * availtime_us;  // at 240Mhz, there are 240 cycles every microsecond
+}
 
 } // end of namespace
 

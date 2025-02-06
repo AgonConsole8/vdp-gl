@@ -116,9 +116,6 @@ protected:
 
   virtual void setupDefaultPalette() = 0;
 
-  void calculateAvailableCyclesForDrawings();
-  static void primitiveExecTask(void * arg);
-
   uint8_t RGB888toPaletteIndex(RGB888 const & rgb) {
     return m_packedRGB222_to_PaletteIndex[RGB888toPackedRGB222(rgb)];
   }
@@ -135,8 +132,6 @@ protected:
   void swapBuffers();
 
 
-  TaskHandle_t                m_primitiveExecTask;
-
   RGB222 *                    m_palette;
 
 
@@ -146,15 +141,6 @@ private:
   void freeViewPort();
   void checkViewPortSize();
   void onSetupDMABuffer(lldesc_t volatile * buffer, bool isStartOfVertFrontPorch, int scan, bool isVisible, int visibleRow);
-
-  // Maximum time (in CPU cycles) available for primitives drawing
-  volatile uint32_t           m_primitiveExecTimeoutCycles;
-
-  volatile bool               m_taskProcessingPrimitives;
-
-  // true = allowed time to process primitives is limited to the vertical blank. Slow, but avoid flickering
-  // false = allowed time is the half of an entire frame. Fast, but may flick
-  bool                        m_processPrimitivesOnBlank;
 
   uint8_t                     m_packedRGB222_to_PaletteIndex[64];
 

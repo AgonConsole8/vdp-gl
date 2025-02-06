@@ -816,14 +816,11 @@ void BitmappedDisplayController::setMouseCursorPos(int X, int Y)
 
 void BitmappedDisplayController::drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight) {
     // normal sprites
-pixelData[13] = 0x30 | m_HVSync;
     int spritesCnt = spritesCount();
     for (int i = 0; i < spritesCnt; ++i) {
-pixelData[19] = 0x03 | m_HVSync;
       Sprite * sprite = getSprite(i);
       if (sprite->hardware &&
           sprite->visible && sprite->allowDraw && sprite->getFrame()) {
-pixelData[22] = 0x0C | m_HVSync;
         auto spriteFrame = sprite->getFrame();
         int spriteWidth = spriteFrame->width;
         int spriteHeight = spriteFrame->height;

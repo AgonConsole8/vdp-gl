@@ -336,6 +336,11 @@ protected:
   // chance to overwrite a scan line in the output DMA buffer
   virtual void decorateScanLinePixels(uint8_t * pixels);
 
+  // Processes primitives upon notification
+  static void primitiveExecTask(void * arg);
+
+  void calculateAvailableCyclesForDrawings();
+
   // when double buffer is enabled the "drawing" view port is always m_viewPort, while the "visible" view port is always m_viewPortVisible
   // when double buffer is not enabled then m_viewPort = m_viewPortVisible
   volatile uint8_t * *   m_viewPort;
@@ -367,6 +372,16 @@ protected:
   static volatile int         s_viewPortHeight;
 
   int                         m_linesCount;     // viewport height must be divisible by m_linesCount
+
+  volatile bool               m_taskProcessingPrimitives;
+  TaskHandle_t                m_primitiveExecTask;
+
+  // Maximum time (in CPU cycles) available for primitives drawing
+  volatile uint32_t           m_primitiveExecTimeoutCycles;
+
+  // true = allowed time to process primitives is limited to the vertical blank. Slow, but avoid flickering
+  // false = allowed time is the half of an entire frame. Fast, but may flick
+  bool                        m_processPrimitivesOnBlank;
 
 private:
 

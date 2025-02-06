@@ -143,6 +143,8 @@ void VGAController::setResolution(VGATimings const& timings, int viewPortWidth, 
   // number of microseconds usable in VSynch ISR
   m_maxVSyncISRTime = ceil(1000000.0 / m_timings.frequency * m_timings.scanCount * m_HLineSize * (m_timings.VSyncPulse + m_timings.VBackPorch + m_timings.VFrontPorch + m_viewPortRow));
 
+  calculateAvailableCyclesForDrawings();
+
   startGPIOStream();
   resumeBackgroundPrimitiveExecution();
 }
@@ -185,20 +187,11 @@ void IRAM_ATTR VGAController::ISRHandler(void * arg)
     }
     
     if (s_scanRow >= height) {
-      // Handle primitives in the background
-      int64_t startTime = ctrl->backgroundPrimitiveTimeoutEnabled() ? esp_timer_get_time() : 0;
-      Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
-      do {
-        Primitive prim;
-        if (ctrl->getPrimitiveISR(&prim) == false)
-          break;
-
-        ctrl->execPrimitive(prim, updateRect, true);
-
-        if (ctrl->m_primitiveProcessingSuspended)
-          break;
-      } while (!ctrl->backgroundPrimitiveTimeoutEnabled() || (startTime + ctrl->m_maxVSyncISRTime > esp_timer_get_time()));
-      ctrl->showSprites(updateRect);
+      if (!ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
+        // vertical sync, unlock primitive execution task
+        // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
+        vTaskNotifyGiveFromISR(ctrl->m_primitiveExecTask, NULL);
+      }
     } else {
       // Process scan lines
       int scanLine = (s_scanLine + VGA64_LinesCount / 2) % height;
@@ -208,7 +201,7 @@ void IRAM_ATTR VGAController::ISRHandler(void * arg)
 
         auto src = (uint8_t const *) s_viewPortVisible[scanLine];
         auto decpix = (uint8_t*) ctrl->m_lines[lineIndex];
-        memset(decpix, 0x10|ctrl->m_HVSync, width);
+        memcpy(decpix, src, width);
         ctrl->decorateScanLinePixels(decpix);
 
         ++lineIndex;
