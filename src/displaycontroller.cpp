@@ -844,16 +844,16 @@ void BitmappedDisplayController::drawSpriteScanLine(uint8_t * pixelData, int sca
 
         switch (spriteFrame->format) {
           case PixelFormat::RGBA8888: {
-              auto src = spriteFrame->data + (offsetY * spriteWidth * 4) + (offsetX * 4);
+              auto src = (const uint32_t*)(spriteFrame->data) + (offsetY * spriteWidth) + offsetX;
               auto pos = spriteX + offsetX;
               while (drawWidth--) {
-                if (src[3]) {
-                  auto r = src[0] >> 6;
-                  auto g = (src[1] >> 6) << 2;
-                  auto b = (src[2] >> 6) << 4;
-                  pixelData[pos ^ 2] = r | g | b | m_HVSync;
+                auto src_pix = *src++;
+                if (src_pix & 0xFF000000) {
+                  auto r = (src_pix & 0x000000C0) >> (8-2);
+                  auto g = (src_pix & 0x0000C000) >> (16-4);
+                  auto b = (src_pix & 0x00C00000) >> (24-6);
+                  pixelData[pos^2] = r | g | b | m_HVSync;
                 }
-                src += 4;
                 pos++;
               }
             }
