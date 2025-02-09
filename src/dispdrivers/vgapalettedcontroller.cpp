@@ -136,7 +136,7 @@ void VGAPalettedController::setResolution(VGATimings const& timings, int viewPor
 
   // fill view port
   for (int i = 0; i < m_viewPortHeight; ++i)
-    memset((void*)(m_viewPort[i]), 0, m_viewPortWidth / m_viewPortRatioDiv * m_viewPortRatioMul);
+    memset((void*)(m_viewPort[i]), nativePixelFormat() == NativePixelFormat::SBGR2222 ? m_HVSync : 0, m_viewPortWidth / m_viewPortRatioDiv * m_viewPortRatioMul);
 
   setupDefaultPalette();
   updateRGB2PaletteLUT();
