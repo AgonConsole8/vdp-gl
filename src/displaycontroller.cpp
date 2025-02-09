@@ -645,6 +645,7 @@ void BitmappedDisplayController::setSprites(Sprite * sprites, int count, int spr
   suspendBackgroundPrimitiveExecution();
   auto updateRect = Rect(0, 0, getViewPortWidth() - 1, getViewPortHeight() - 1);
   hideSprites(updateRect);
+  m_spritesCount = 0;
   m_sprites      = sprites;
   m_spriteSize   = spriteSize;
   m_spritesCount = count;
