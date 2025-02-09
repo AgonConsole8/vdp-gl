@@ -699,12 +699,10 @@ void IRAM_ATTR VGA64Controller::ISRHandler(void * arg)
 
     if (desc == s_frameResetDesc) {
       s_scanLine = 0;
-      s_scanRow = 0;
     }
 
     auto const width  = ctrl->m_viewPortWidth;
     auto const height = ctrl->m_viewPortHeight;
-    // auto const packedPaletteIndexPair_to_signals = (uint16_t const *) ctrl->m_packedPaletteIndexPair_to_signals;
     auto const lines  = ctrl->m_lines;
 
     int scanLine = (s_scanLine + VGA64_LinesCount / 2) % height;
@@ -712,16 +710,14 @@ void IRAM_ATTR VGA64Controller::ISRHandler(void * arg)
     auto lineIndex = scanLine & (VGA64_LinesCount - 1);
 
     for (int i = 0; i < VGA64_LinesCount / 2; ++i) {
-
       auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
       auto dest = (uint8_t*) lines[lineIndex];
 
       memcpy(dest, src, width);
 
-      ctrl->decorateScanLinePixels(dest);
+      ctrl->decorateScanLinePixels(dest, scanLine);
       ++lineIndex;
       ++scanLine;
-      ++s_scanRow;
     }
 
     s_scanLine += VGA64_LinesCount / 2;

@@ -183,10 +183,11 @@ void IRAM_ATTR VGAController::ISRHandler(void * arg)
     if (desc == s_frameResetDesc) {
       // Start new frame
       s_scanLine = 0;
-      s_scanRow = 0;
     }
     
-    if (s_scanRow >= height) {
+    int scanLine = (s_scanLine + VGA64_LinesCount / 2) % height;
+
+    if (scanLine >= height) {
       if (!ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
         // vertical sync, unlock primitive execution task
         // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
@@ -194,7 +195,6 @@ void IRAM_ATTR VGAController::ISRHandler(void * arg)
       }
     } else {
       // Process scan lines
-      int scanLine = (s_scanLine + VGA64_LinesCount / 2) % height;
       auto lineIndex = scanLine & (VGA64_LinesCount - 1);
 
       for (int i = 0; i < VGA64_LinesCount / 2; ++i) {
@@ -202,11 +202,10 @@ void IRAM_ATTR VGAController::ISRHandler(void * arg)
         auto src = (uint8_t const *) s_viewPortVisible[scanLine];
         auto decpix = (uint8_t*) ctrl->m_lines[lineIndex];
         memcpy(decpix, src, width);
-        ctrl->decorateScanLinePixels(decpix);
+        ctrl->decorateScanLinePixels(decpix, scanLine);
 
         ++lineIndex;
         ++scanLine;
-        ++s_scanRow;
       }
 
       s_scanLine += VGA64_LinesCount / 2;
