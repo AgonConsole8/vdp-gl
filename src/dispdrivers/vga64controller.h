@@ -55,22 +55,21 @@ namespace fabgl {
 
 
 /**
-* @brief Represents the VGA 16 colors bitmapped controller
+* @brief Represents the VGA 64 colors bitmapped controller
 *
-* This VGA controller allows just 16 colors, but requires less (1/2) RAM than VGAController, at the same resolution. Each pixel is represented
-* by 4 bits, which is an index to a palette of 16 colors. Each byte of the frame buffer contains two pixels.
-* For example, a frame buffer of 640x480 requires about 153K of RAM.
+* This controller works in the same way as other VGA controllers based on VGAPalettedController, but works with a framebuffer that is the
+* same as with VGAController, and does not actually support a palette.  This controller however supports "hardware sprites".
 *
-* VGA64Controller output is a CPU intensive process and consumes up to 19% of one CPU core (measured at 640x480x60Hz). Anyway this allows to have
-* more RAM free for your application.
+* In contrast to other palette-based controllers, the performance impact of this controller has not been properly measured.
+* Benchmark testing seems to indicate performance essentially on-par with VGAController.
 *
 *
-* This example initializes VGA Controller with 64 colors (16 visible at the same time) at 640x480:
+* This example initializes VGA Controller with 64 colors (all visible at the same time) at 640x350:
 *
 *     fabgl::VGA64Controller displayController;
 *     // the default assigns GPIO22 and GPIO21 to Red, GPIO19 and GPIO18 to Green, GPIO5 and GPIO4 to Blue, GPIO23 to HSync and GPIO15 to VSync
 *     displayController.begin();
-*     displayController.setResolution(VGA_640x480_60Hz);
+*     displayController.setResolution(VGA_640x350_70Hz);
 */
 class VGA64Controller : public VGAPalettedController {
 
@@ -207,7 +206,7 @@ private:
 
   static VGA64Controller *    s_instance;
 
-  volatile uint16_t           m_packedPaletteIndexPair_to_signals[256];
+  volatile uint16_t           m_packedPaletteIndexPair_to_signals[1];
 
 };
 

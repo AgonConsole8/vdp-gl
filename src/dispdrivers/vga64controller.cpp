@@ -76,15 +76,6 @@ void VGA64Controller::setupDefaultPalette()
 
 void VGA64Controller::setPaletteItem(int index, RGB888 const & color)
 {
-//   index %= 64;
-//   m_palette[index] = color;
-//   auto packed222 = RGB888toPackedRGB222(color);
-//   for (int i = 0; i < 16; ++i) {
-//     m_packedPaletteIndexPair_to_signals[(index << 4) | i] &= 0xFF00;
-//     m_packedPaletteIndexPair_to_signals[(index << 4) | i] |= (m_HVSync | packed222);
-//     m_packedPaletteIndexPair_to_signals[(i << 4) | index] &= 0x00FF;
-//     m_packedPaletteIndexPair_to_signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
-//   }
 }
 
 
