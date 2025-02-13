@@ -645,6 +645,8 @@ struct Sprite {
     uint8_t isStatic:  1;
     // This is always '1' for dynamic sprites and always '0' for static sprites.
     uint8_t allowDraw: 1;
+    // This tells the system to draw it as a hardware sprite (on-the-fly).
+    uint8_t hardware:  1;
   };
 
   Sprite();
@@ -816,6 +818,9 @@ protected:
   int16_t          m_screenHeight;
   volatile int16_t m_viewPortWidth;
   volatile int16_t m_viewPortHeight;
+
+  // contains H and V signals for visible line
+  volatile uint8_t m_HVSync;
 };
 
 
@@ -1098,6 +1103,8 @@ protected:
   void hideSprites(Rect & updateRect);
 
   void showSprites(Rect & updateRect);
+
+  void drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight);
 
   void drawBitmap(BitmapDrawingInfo const & bitmapDrawingInfo, Rect & updateRect);
 

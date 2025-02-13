@@ -167,6 +167,7 @@ Sprite::Sprite()
   visible                 = true;
   isStatic                = false;
   allowDraw               = true;
+  hardware                = false;
   paintOptions            = PaintOptions();
 }
 
@@ -653,6 +654,7 @@ void BitmappedDisplayController::setSprites(Sprite * sprites, int count, int spr
     uint8_t * spritePtr = (uint8_t*)m_sprites;
     for (int i = 0; i < m_spritesCount; ++i, spritePtr += m_spriteSize) {
       Sprite * sprite = (Sprite*) spritePtr;
+      if (sprite->hardware) continue;
       int reqBackBufferSize = 0;
       for (int i = 0; i < sprite->framesCount; ++i)
         reqBackBufferSize = tmax(reqBackBufferSize, sprite->frames[i]->width * getBitmapSavePixelSize() * sprite->frames[i]->height);
@@ -689,7 +691,8 @@ void IRAM_ATTR BitmappedDisplayController::hideSprites(Rect & updateRect)
       // restore saved backgrounds
       for (int i = spritesCount() - 1; i >= 0; --i) {
         Sprite * sprite = getSprite(i);
-        if (sprite->allowDraw && sprite->savedBackgroundWidth > 0) {
+        if (!sprite->hardware &&
+            sprite->allowDraw && sprite->savedBackgroundWidth > 0) {
           int savedX = sprite->savedX;
           int savedY = sprite->savedY;
           int savedWidth  = sprite->savedBackgroundWidth;
@@ -728,7 +731,8 @@ void IRAM_ATTR BitmappedDisplayController::showSprites(Rect & updateRect)
     // save backgrounds and draw sprites
     for (int i = 0; i < spritesCount(); ++i) {
       Sprite * sprite = getSprite(i);
-      if (sprite->visible && sprite->allowDraw && sprite->getFrame()) {
+      if (!sprite->hardware &&
+          sprite->visible && sprite->allowDraw && sprite->getFrame()) {
         // save sprite X and Y so other threads can change them without interferring
         int spriteX = sprite->x;
         int spriteY = sprite->y;
@@ -807,6 +811,97 @@ void BitmappedDisplayController::setMouseCursorPos(int X, int Y)
 {
   m_mouseCursor.moveTo(X - m_mouseHotspotX, Y - m_mouseHotspotY);
   refreshSprites();
+}
+
+
+void BitmappedDisplayController::drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight) {
+    // normal sprites
+    int spritesCnt = spritesCount();
+    for (int i = 0; i < spritesCnt; ++i) {
+      Sprite * sprite = getSprite(i);
+      if (sprite->hardware &&
+          sprite->visible && sprite->allowDraw && sprite->getFrame()) {
+        auto spriteFrame = sprite->getFrame();
+        int spriteWidth = spriteFrame->width;
+        int spriteHeight = spriteFrame->height;
+
+        int spriteY = sprite->y;
+        int spriteYend = spriteY + spriteHeight;
+        if (scanRow < spriteY) continue;
+        if (scanRow >= spriteYend) continue;
+        int offsetY = scanRow - spriteY;
+
+        int spriteX = sprite->x;
+        if (spriteX >= scanWidth) continue;
+        int spriteXend = spriteX + spriteWidth;
+        if (spriteXend <= 0) continue;
+
+        int offsetX = (spriteX < 0 ? -spriteX : 0);
+        int drawWidth =
+          (spriteXend > scanWidth ?
+            scanWidth - spriteX :
+            spriteWidth - offsetX);
+
+        switch (spriteFrame->format) {
+          case PixelFormat::RGBA8888: {
+              auto src = (const uint32_t*)(spriteFrame->data) + (offsetY * spriteWidth) + offsetX;
+              auto pos = spriteX + offsetX;
+              while (drawWidth--) {
+                auto src_pix = *src++;
+                if (src_pix & 0xFF000000) {
+                  auto r = (src_pix & 0x000000C0) >> (8-2);
+                  auto g = (src_pix & 0x0000C000) >> (16-4);
+                  auto b = (src_pix & 0x00C00000) >> (24-6);
+                  pixelData[pos^2] = r | g | b | m_HVSync;
+                }
+                pos++;
+              }
+            }
+            break;
+
+          case PixelFormat::RGBA2222: {
+              auto src = spriteFrame->data + (offsetY * spriteWidth) + offsetX;
+              pixelData += spriteX + offsetX;
+              auto hv4 = (((uint32_t) m_HVSync) << 24) |
+                        (((uint32_t) m_HVSync) << 16) |
+                        (((uint32_t) m_HVSync) << 8) |
+                        ((uint32_t) m_HVSync);
+
+              while (drawWidth) {
+                if (drawWidth >= 4 && !((uint32_t)(void*)pixelData & 3))
+                {
+                  // Do a full word (4 pixels)
+                  auto src_pix = *((uint32_t*)src);
+                  auto alphas = src_pix & 0xC0C0C0C0; 
+                  if (alphas == 0xC0C0C0C0) {
+                    src_pix = (src_pix & 0x3F3F3F3F) | hv4; 
+                    *((uint32_t*)pixelData) = (src_pix << 16) | (src_pix >> 16);
+                    src += 4;
+                    pixelData += 4;
+                    drawWidth -= 4;
+                    continue;
+                  } else if (alphas == 0x00000000) {
+                    src += 4;
+                    pixelData += 4;
+                    drawWidth -= 4;
+                    continue;
+                  }
+                }
+
+                // Just do a single byte (1 pixel)
+                if (*src & 0xC0) {
+                  auto rgb = *src & 0x3F;
+                  *((uint8_t*)(((uint32_t)(void*)pixelData)^2)) = rgb | m_HVSync;
+                }
+                src++;
+                pixelData++;
+                drawWidth--;
+              }
+            }
+            break;
+        }
+      }
+    }
 }
 
 

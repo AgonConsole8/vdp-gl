@@ -115,7 +115,6 @@ struct VGATimings {
 };
 
 
-
 class VGABaseController : public GenericBitmappedDisplayController {
 
 public:
@@ -289,8 +288,6 @@ public:
 
   uint8_t createBlankRawPixel()                  { return m_HVSync; }
 
-
-
 protected:
 
   static void setupGPIO(gpio_num_t gpio, int bit, gpio_mode_t mode);
@@ -336,6 +333,13 @@ protected:
   // abstract method of BitmappedDisplayController
   virtual void swapBuffers();
 
+  // chance to overwrite a scan line in the output DMA buffer
+  virtual void decorateScanLinePixels(uint8_t * pixels);
+
+  // Processes primitives upon notification
+  static void primitiveExecTask(void * arg);
+
+  void calculateAvailableCyclesForDrawings();
 
   // when double buffer is enabled the "drawing" view port is always m_viewPort, while the "visible" view port is always m_viewPortVisible
   // when double buffer is not enabled then m_viewPort = m_viewPortVisible
@@ -355,9 +359,29 @@ protected:
   volatile int16_t       m_viewPortCol;
   volatile int16_t       m_viewPortRow;
 
-  // contains H and V signals for visible line
-  volatile uint8_t       m_HVSync;
+  volatile uint8_t * *        m_lines;
 
+  // optimization: clones of m_viewPort and m_viewPortVisible
+  static volatile uint8_t * * s_viewPort;
+  static volatile uint8_t * * s_viewPortVisible;
+
+  static lldesc_t volatile *  s_frameResetDesc;
+  static volatile int         s_scanLine;
+  static volatile int         s_scanRow;
+  static volatile int         s_scanWidth;
+  static volatile int         s_viewPortHeight;
+
+  int                         m_linesCount;     // viewport height must be divisible by m_linesCount
+
+  volatile bool               m_taskProcessingPrimitives;
+  TaskHandle_t                m_primitiveExecTask;
+
+  // Maximum time (in CPU cycles) available for primitives drawing
+  volatile uint32_t           m_primitiveExecTimeoutCycles;
+
+  // true = allowed time to process primitives is limited to the vertical blank. Slow, but avoid flickering
+  // false = allowed time is the half of an entire frame. Fast, but may flick
+  bool                        m_processPrimitivesOnBlank;
 
 private:
 

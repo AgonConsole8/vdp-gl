@@ -732,8 +732,10 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
 
     auto const desc = (lldesc_t*) I2S1.out_eof_des_addr;
 
-    if (desc == s_frameResetDesc)
+    if (desc == s_frameResetDesc) {
       s_scanLine = 0;
+      s_scanRow = 0;
+    }
 
     auto const width  = ctrl->m_viewPortWidth;
     auto const height = ctrl->m_viewPortHeight;
@@ -748,6 +750,7 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
 
       auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
       auto dest = (uint32_t*) lines[lineIndex];
+      uint8_t* decpix = (uint8_t*) dest;
 
       // optimization warn: horizontal resolution must be a multiple of 16!
       for (int col = 0; col < width; col += 16) {
@@ -773,8 +776,10 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
         src += 4;
       }
 
+      ctrl->decorateScanLinePixels(decpix);
       ++lineIndex;
       ++scanLine;
+      ++s_scanRow;
     }
 
     s_scanLine += VGA4_LinesCount / 2;

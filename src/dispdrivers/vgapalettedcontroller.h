@@ -116,9 +116,6 @@ protected:
 
   virtual void setupDefaultPalette() = 0;
 
-  void calculateAvailableCyclesForDrawings();
-  static void primitiveExecTask(void * arg);
-
   uint8_t RGB888toPaletteIndex(RGB888 const & rgb) {
     return m_packedRGB222_to_PaletteIndex[RGB888toPackedRGB222(rgb)];
   }
@@ -135,18 +132,6 @@ protected:
   void swapBuffers();
 
 
-  TaskHandle_t                m_primitiveExecTask;
-
-  volatile uint8_t * *        m_lines;
-
-  // optimization: clones of m_viewPort and m_viewPortVisible
-  static volatile uint8_t * * s_viewPort;
-  static volatile uint8_t * * s_viewPortVisible;
-
-  static lldesc_t volatile *  s_frameResetDesc;
-
-  static volatile int         s_scanLine;
-
   RGB222 *                    m_palette;
 
 
@@ -157,19 +142,9 @@ private:
   void checkViewPortSize();
   void onSetupDMABuffer(lldesc_t volatile * buffer, bool isStartOfVertFrontPorch, int scan, bool isVisible, int visibleRow);
 
-  // Maximum time (in CPU cycles) available for primitives drawing
-  volatile uint32_t           m_primitiveExecTimeoutCycles;
-
-  volatile bool               m_taskProcessingPrimitives;
-
-  // true = allowed time to process primitives is limited to the vertical blank. Slow, but avoid flickering
-  // false = allowed time is the half of an entire frame. Fast, but may flick
-  bool                        m_processPrimitivesOnBlank;
-
   uint8_t                     m_packedRGB222_to_PaletteIndex[64];
 
   // configuration
-  int                         m_linesCount;     // viewport height must be divisible by m_linesCount
   int                         m_columnsQuantum; // viewport width must be divisble by m_columnsQuantum
   NativePixelFormat           m_nativePixelFormat;
   int                         m_viewPortRatioDiv;
