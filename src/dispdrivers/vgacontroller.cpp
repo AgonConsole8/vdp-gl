@@ -65,25 +65,14 @@ VGAController * VGAController::s_instance = nullptr;
 VGAController::VGAController()
 {
   s_instance = this;
-  m_linesCount = VGA64_LinesCount;
-  m_lines = (volatile uint8_t**) heap_caps_malloc(sizeof(uint8_t*) * m_linesCount, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
 }
 
-VGAController::~VGAController() {
-  heap_caps_free(m_lines);
-}
 
 void VGAController::init()
 {
   VGABaseController::init();
 
   m_doubleBufferOverDMA = true;
-}
-
-// make sure view port height is divisible by m_linesCount
-void VGAController::checkViewPortSize()
-{
-  m_viewPortHeight &= ~(m_linesCount - 1);
 }
 
 
@@ -102,7 +91,7 @@ void VGAController::resumeBackgroundPrimitiveExecution()
   VGABaseController::resumeBackgroundPrimitiveExecution();
   if (m_primitiveProcessingSuspended == 0) {
     if (m_isr_handle == nullptr)
-      esp_intr_alloc(ETS_I2S1_INTR_SOURCE, ESP_INTR_FLAG_LEVEL1, ISRHandler, this, &m_isr_handle);
+      esp_intr_alloc(ETS_I2S1_INTR_SOURCE, ESP_INTR_FLAG_LEVEL1, VSyncInterrupt, this, &m_isr_handle);
     I2S1.int_clr.val     = 0xFFFFFFFF;
     I2S1.int_ena.out_eof = 1;
   }
@@ -111,30 +100,13 @@ void VGAController::resumeBackgroundPrimitiveExecution()
 
 void VGAController::allocateViewPort()
 {
-  VGABaseController::allocateViewPort(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL, m_viewPortWidth);
-
-  for (int i = 0; i < m_linesCount; ++i)
-    m_lines[i] = (uint8_t*) heap_caps_malloc(m_viewPortWidth, MALLOC_CAP_DMA);
-}
-
-
-void VGAController::freeViewPort()
-{
-  VGABaseController::freeViewPort();
-
-  for (int i = 0; i < m_linesCount; ++i) {
-    heap_caps_free((void*)m_lines[i]);
-    m_lines[i] = nullptr;
-  }
+  VGABaseController::allocateViewPort(MALLOC_CAP_DMA, m_viewPortWidth);
 }
 
 
 void VGAController::setResolution(VGATimings const& timings, int viewPortWidth, int viewPortHeight, bool doubleBuffered)
 {
   VGABaseController::setResolution(timings, viewPortWidth, viewPortHeight, doubleBuffered);
-
-  s_viewPort        = m_viewPort;
-  s_viewPortVisible = m_viewPortVisible;
 
   // fill view port
   for (int i = 0; i < m_viewPortHeight; ++i)
@@ -143,8 +115,6 @@ void VGAController::setResolution(VGATimings const& timings, int viewPortWidth, 
   // number of microseconds usable in VSynch ISR
   m_maxVSyncISRTime = ceil(1000000.0 / m_timings.frequency * m_timings.scanCount * m_HLineSize * (m_timings.VSyncPulse + m_timings.VBackPorch + m_timings.VFrontPorch + m_viewPortRow));
 
-  calculateAvailableCyclesForDrawings();
-
   startGPIOStream();
   resumeBackgroundPrimitiveExecution();
 }
@@ -152,64 +122,30 @@ void VGAController::setResolution(VGATimings const& timings, int viewPortWidth, 
 
 void VGAController::onSetupDMABuffer(lldesc_t volatile * buffer, bool isStartOfVertFrontPorch, int scan, bool isVisible, int visibleRow)
 {
-  if (isVisible) {
-    buffer->buf = (uint8_t *) m_lines[visibleRow % m_linesCount];
-
-    // generate interrupt every half m_linesCount
-    if ((scan == 0 && (visibleRow % (m_linesCount / 2)) == 0)) {
-      if (visibleRow == 0)
-        s_frameResetDesc = buffer;
-      buffer->eof = 1;
-    }
-  }
-
   // generate interrupt at the beginning of vertical front porch
-  if (isStartOfVertFrontPorch) {
+  if (isStartOfVertFrontPorch)
     buffer->eof = 1;
-  }
 }
 
 
-void IRAM_ATTR VGAController::ISRHandler(void * arg)
+void IRAM_ATTR VGAController::VSyncInterrupt(void * arg)
 {
   if (I2S1.int_st.out_eof) {
-    auto ctrl = (VGAController*)arg;
-    auto const width  = ctrl->m_viewPortWidth;
-    auto const height = ctrl->m_viewPortHeight;
+    auto VGACtrl = (VGAController*)arg;
+    int64_t startTime = VGACtrl->backgroundPrimitiveTimeoutEnabled() ? esp_timer_get_time() : 0;
+    Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
+    do {
+      Primitive prim;
+      if (VGACtrl->getPrimitiveISR(&prim) == false)
+        break;
 
-    // Determine whether we are handling a scan line or blanking area
-    auto const desc = (lldesc_t*) I2S1.out_eof_des_addr;
+      VGACtrl->execPrimitive(prim, updateRect, true);
 
-    if (desc == s_frameResetDesc) {
-      // Start new frame
-      s_scanLine = 0;
-    }
-    
-    int scanLine = (s_scanLine + VGA64_LinesCount / 2) % height;
+      if (VGACtrl->m_primitiveProcessingSuspended)
+        break;
 
-    if (scanLine >= height) {
-      if (!ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
-        // vertical sync, unlock primitive execution task
-        // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
-        vTaskNotifyGiveFromISR(ctrl->m_primitiveExecTask, NULL);
-      }
-    } else {
-      // Process scan lines
-      auto lineIndex = scanLine & (VGA64_LinesCount - 1);
-
-      for (int i = 0; i < VGA64_LinesCount / 2; ++i) {
-
-        auto src = (uint8_t const *) s_viewPortVisible[scanLine];
-        auto decpix = (uint8_t*) ctrl->m_lines[lineIndex];
-        memcpy(decpix, src, width);
-        ctrl->decorateScanLinePixels(decpix, scanLine);
-
-        ++lineIndex;
-        ++scanLine;
-      }
-
-      s_scanLine += VGA64_LinesCount / 2;
-    }
+    } while (!VGACtrl->backgroundPrimitiveTimeoutEnabled() || (startTime + VGACtrl->m_maxVSyncISRTime > esp_timer_get_time()));
+    VGACtrl->showSprites(updateRect);
   }
   I2S1.int_clr.val = I2S1.int_st.val;
 }
