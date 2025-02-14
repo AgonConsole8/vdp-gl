@@ -734,7 +734,6 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
 
     if (desc == s_frameResetDesc) {
       s_scanLine = 0;
-      s_scanRow = 0;
     }
 
     auto const width  = ctrl->m_viewPortWidth;
@@ -776,10 +775,9 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
         src += 4;
       }
 
-      ctrl->decorateScanLinePixels(decpix);
+      ctrl->decorateScanLinePixels(decpix, scanLine);
       ++lineIndex;
       ++scanLine;
-      ++s_scanRow;
     }
 
     s_scanLine += VGA4_LinesCount / 2;

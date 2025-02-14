@@ -1,12 +1,4 @@
 /*
-  Created by Fabrizio Di Vittorio (fdivitto2013@gmail.com) - <http://www.fabgl.com>
-  Copyright (c) 2019-2022 Fabrizio Di Vittorio.
-  All rights reserved.
-
-
-* Please contact fdivitto2013@gmail.com if you need a commercial license.
-
-
 * This library and related software is available under GPL v3.
 
   FabGL is free software: you can redistribute it and/or modify
@@ -24,7 +16,6 @@
  */
 
 
-
 #include <alloca.h>
 #include <stdarg.h>
 #include <math.h>
@@ -38,15 +29,17 @@
 #include "driver/periph_ctrl.h"
 #include "soc/rtc.h"
 #include "esp_spi_flash.h"
+#include "esp_heap_caps.h"
 
 #include "fabutils.h"
-#include "vgacontroller.h"
+#include "vga64controller.h"
 #include "devdrivers/swgenerator.h"
 
 
 
-
 #pragma GCC optimize ("O2")
+
+
 
 
 namespace fabgl {
@@ -54,104 +47,39 @@ namespace fabgl {
 
 
 
+#define VGA64_COLUMNSQUANTUM 16
+
 
 /*************************************************************************************/
-/* VGAController definitions */
+/* VGA64Controller definitions */
 
 
-VGAController * VGAController::s_instance = nullptr;
+VGA64Controller * VGA64Controller::s_instance = nullptr;
 
 
-VGAController::VGAController()
+
+VGA64Controller::VGA64Controller()
+  : VGAPalettedController(VGA64_LinesCount, VGA64_COLUMNSQUANTUM, NativePixelFormat::SBGR2222, 1, 1, ISRHandler)
 {
   s_instance = this;
 }
 
 
-void VGAController::init()
+void VGA64Controller::setupDefaultPalette()
 {
-  VGABaseController::init();
-
-  m_doubleBufferOverDMA = true;
-}
-
-
-void VGAController::suspendBackgroundPrimitiveExecution()
-{
-  VGABaseController::suspendBackgroundPrimitiveExecution();
-  if (m_primitiveProcessingSuspended == 1) {
-    I2S1.int_clr.val     = 0xFFFFFFFF;
-    I2S1.int_ena.out_eof = 0;
+  for (int colorIndex = 0; colorIndex < 16; ++colorIndex) {
+    RGB888 rgb888((Color)colorIndex);
+    setPaletteItem(colorIndex, rgb888);
   }
 }
 
 
-void VGAController::resumeBackgroundPrimitiveExecution()
+void VGA64Controller::setPaletteItem(int index, RGB888 const & color)
 {
-  VGABaseController::resumeBackgroundPrimitiveExecution();
-  if (m_primitiveProcessingSuspended == 0) {
-    if (m_isr_handle == nullptr)
-      esp_intr_alloc(ETS_I2S1_INTR_SOURCE, ESP_INTR_FLAG_LEVEL1, VSyncInterrupt, this, &m_isr_handle);
-    I2S1.int_clr.val     = 0xFFFFFFFF;
-    I2S1.int_ena.out_eof = 1;
-  }
 }
 
 
-void VGAController::allocateViewPort()
-{
-  VGABaseController::allocateViewPort(MALLOC_CAP_DMA, m_viewPortWidth);
-}
-
-
-void VGAController::setResolution(VGATimings const& timings, int viewPortWidth, int viewPortHeight, bool doubleBuffered)
-{
-  VGABaseController::setResolution(timings, viewPortWidth, viewPortHeight, doubleBuffered);
-
-  // fill view port
-  for (int i = 0; i < m_viewPortHeight; ++i)
-    fill(m_viewPort[i], 0, m_viewPortWidth, 0, 0, 0, false, false);
-
-  // number of microseconds usable in VSynch ISR
-  m_maxVSyncISRTime = ceil(1000000.0 / m_timings.frequency * m_timings.scanCount * m_HLineSize * (m_timings.VSyncPulse + m_timings.VBackPorch + m_timings.VFrontPorch + m_viewPortRow));
-
-  startGPIOStream();
-  resumeBackgroundPrimitiveExecution();
-}
-
-
-void VGAController::onSetupDMABuffer(lldesc_t volatile * buffer, bool isStartOfVertFrontPorch, int scan, bool isVisible, int visibleRow)
-{
-  // generate interrupt at the beginning of vertical front porch
-  if (isStartOfVertFrontPorch)
-    buffer->eof = 1;
-}
-
-
-void IRAM_ATTR VGAController::VSyncInterrupt(void * arg)
-{
-  if (I2S1.int_st.out_eof) {
-    auto VGACtrl = (VGAController*)arg;
-    int64_t startTime = VGACtrl->backgroundPrimitiveTimeoutEnabled() ? esp_timer_get_time() : 0;
-    Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
-    do {
-      Primitive prim;
-      if (VGACtrl->getPrimitiveISR(&prim) == false)
-        break;
-
-      VGACtrl->execPrimitive(prim, updateRect, true);
-
-      if (VGACtrl->m_primitiveProcessingSuspended)
-        break;
-
-    } while (!VGACtrl->backgroundPrimitiveTimeoutEnabled() || (startTime + VGACtrl->m_maxVSyncISRTime > esp_timer_get_time()));
-    VGACtrl->showSprites(updateRect);
-  }
-  I2S1.int_clr.val = I2S1.int_st.val;
-}
-
-
-std::function<uint8_t(RGB888 const &)> IRAM_ATTR VGAController::getPixelLambda(PaintMode mode)
+std::function<uint8_t(RGB888 const &)> VGA64Controller::getPixelLambda(PaintMode mode)
 {
   switch (mode) {
     case PaintMode::XOR:
@@ -162,7 +90,7 @@ std::function<uint8_t(RGB888 const &)> IRAM_ATTR VGAController::getPixelLambda(P
 }
 
 
-std::function<void(int X, int Y, uint8_t pattern)> IRAM_ATTR VGAController::setPixelLambda(PaintMode mode)
+std::function<void(int X, int Y, uint8_t colorIndex)> VGA64Controller::setPixelLambda(PaintMode mode)
 {
   switch (mode) {
     case PaintMode::Set:
@@ -185,7 +113,7 @@ std::function<void(int X, int Y, uint8_t pattern)> IRAM_ATTR VGAController::setP
 }
 
 
-std::function<void(uint8_t * row, int x, uint8_t pattern)> IRAM_ATTR VGAController::setRowPixelLambda(PaintMode mode)
+std::function<void(uint8_t * row, int x, uint8_t colorIndex)> VGA64Controller::setRowPixelLambda(PaintMode mode)
 {
   switch (mode) {
     case PaintMode::Set:
@@ -204,12 +132,11 @@ std::function<void(uint8_t * row, int x, uint8_t pattern)> IRAM_ATTR VGAControll
       return [&] (uint8_t * row, int x, uint8_t pattern) { auto px = &VGA_PIXELINROW(row, x); *px = ~(*px ^ VGA_SYNC_MASK); };
     default:  // PaintMode::NoOp
       return [&] (uint8_t * row, int x, uint8_t pattern) { return; };
-  
   }
 }
 
 
-std::function<void(int Y, int X1, int X2, uint8_t pattern)> IRAM_ATTR VGAController::fillRowLambda(PaintMode mode)
+std::function<void(int Y, int X1, int X2, uint8_t colorIndex)> VGA64Controller::fillRowLambda(PaintMode mode)
 {
   switch (mode) {
     case PaintMode::Set:
@@ -232,18 +159,16 @@ std::function<void(int Y, int X1, int X2, uint8_t pattern)> IRAM_ATTR VGAControl
 }
 
 
-
-void IRAM_ATTR VGAController::setPixelAt(PixelDesc const & pixelDesc, Rect & updateRect)
+void VGA64Controller::setPixelAt(PixelDesc const & pixelDesc, Rect & updateRect)
 {
   auto paintMode = paintState().paintOptions.mode;
   genericSetPixelAt(pixelDesc, updateRect, getPixelLambda(paintMode), setPixelLambda(paintMode));
 }
 
 
-
 // coordinates are absolute values (not relative to origin)
 // line clipped on current absolute clipping rectangle
-void IRAM_ATTR VGAController::absDrawLine(int X1, int Y1, int X2, int Y2, RGB888 color)
+void VGA64Controller::absDrawLine(int X1, int Y1, int X2, int Y2, RGB888 color)
 {
   auto paintMode = paintState().paintOptions.NOT ? PaintMode::NOT : paintState().paintOptions.mode;
   genericAbsDrawLine(X1, Y1, X2, Y2, color,
@@ -255,7 +180,7 @@ void IRAM_ATTR VGAController::absDrawLine(int X1, int Y1, int X2, int Y2, RGB888
 
 
 // parameters not checked
-void IRAM_ATTR VGAController::fillRow(int y, int x1, int x2, RGB888 color)
+void VGA64Controller::fillRow(int y, int x1, int x2, RGB888 color)
 {
   // This version, passing an RGB888 color, is only used by shape drawing methods,
   // so we will pick fill method based on paint mode
@@ -268,7 +193,7 @@ void IRAM_ATTR VGAController::fillRow(int y, int x1, int x2, RGB888 color)
 
 
 // parameters not checked
-void IRAM_ATTR VGAController::rawFillRow(int y, int x1, int x2, uint8_t pattern)
+void VGA64Controller::rawFillRow(int y, int x1, int x2, uint8_t pattern)
 {
   auto row = m_viewPort[y];
   // fill first bytes before full 32 bits word
@@ -290,7 +215,7 @@ void IRAM_ATTR VGAController::rawFillRow(int y, int x1, int x2, uint8_t pattern)
 
 
 // parameters not checked
-void IRAM_ATTR VGAController::rawORRow(int y, int x1, int x2, uint8_t pattern)
+void VGA64Controller::rawORRow(int y, int x1, int x2, uint8_t pattern)
 {
   auto row = m_viewPort[y];
   // naive implementation - just do whole row iteratively
@@ -301,7 +226,7 @@ void IRAM_ATTR VGAController::rawORRow(int y, int x1, int x2, uint8_t pattern)
 
 
 // parameters not checked
-void IRAM_ATTR VGAController::rawANDRow(int y, int x1, int x2, uint8_t pattern)
+void VGA64Controller::rawANDRow(int y, int x1, int x2, uint8_t pattern)
 {
   auto row = m_viewPort[y];
   // naive implementation - just do whole row iteratively
@@ -312,7 +237,7 @@ void IRAM_ATTR VGAController::rawANDRow(int y, int x1, int x2, uint8_t pattern)
 
 
 // parameters not checked
-void IRAM_ATTR VGAController::rawXORRow(int y, int x1, int x2, uint8_t pattern)
+void VGA64Controller::rawXORRow(int y, int x1, int x2, uint8_t pattern)
 {
   auto row = m_viewPort[y];
   // naive implementation - just do whole row iteratively
@@ -323,7 +248,7 @@ void IRAM_ATTR VGAController::rawXORRow(int y, int x1, int x2, uint8_t pattern)
 
 
 // parameters not checked
-void IRAM_ATTR VGAController::rawInvertRow(int y, int x1, int x2)
+void VGA64Controller::rawInvertRow(int y, int x1, int x2)
 {
   auto row = m_viewPort[y];
   for (int x = x1; x <= x2; ++x) {
@@ -333,9 +258,13 @@ void IRAM_ATTR VGAController::rawInvertRow(int y, int x1, int x2)
 }
 
 
-// swaps all pixels inside the range x1...x2 of yA and yB
-// parameters not checked
-void IRAM_ATTR VGAController::swapRows(int yA, int yB, int x1, int x2)
+void VGA64Controller::rawCopyRow(int x1, int x2, int srcY, int dstY)
+{
+    // This function does not seem to be used
+}
+
+
+void VGA64Controller::swapRows(int yA, int yB, int x1, int x2)
 {
   uint8_t * rowA = (uint8_t*) m_viewPort[yA];
   uint8_t * rowB = (uint8_t*) m_viewPort[yB];
@@ -354,35 +283,35 @@ void IRAM_ATTR VGAController::swapRows(int yA, int yB, int x1, int x2)
 }
 
 
-void IRAM_ATTR VGAController::drawEllipse(Size const & size, Rect & updateRect)
+void VGA64Controller::drawEllipse(Size const & size, Rect & updateRect)
 {
   auto mode = paintState().paintOptions.mode;
   genericDrawEllipse(size, updateRect, getPixelLambda(mode), setPixelLambda(mode));
 }
 
 
-void IRAM_ATTR VGAController::drawArc(Rect const & rect, Rect & updateRect)
+void VGA64Controller::drawArc(Rect const & rect, Rect & updateRect)
 {
   auto mode = paintState().paintOptions.mode;
   genericDrawArc(rect, updateRect, getPixelLambda(mode), setPixelLambda(mode));
 }
 
 
-void IRAM_ATTR VGAController::fillSegment(Rect const & rect, Rect & updateRect)
+void VGA64Controller::fillSegment(Rect const & rect, Rect & updateRect)
 {
   auto mode = paintState().paintOptions.mode;
   genericFillSegment(rect, updateRect, getPixelLambda(mode), fillRowLambda(mode));
 }
 
 
-void IRAM_ATTR VGAController::fillSector(Rect const & rect, Rect & updateRect)
+void VGA64Controller::fillSector(Rect const & rect, Rect & updateRect)
 {
   auto mode = paintState().paintOptions.mode;
   genericFillSector(rect, updateRect, getPixelLambda(mode), fillRowLambda(mode));
 }
 
 
-void IRAM_ATTR VGAController::clear(Rect & updateRect)
+void VGA64Controller::clear(Rect & updateRect)
 {
   hideSprites(updateRect);
   uint8_t pattern = preparePixel(getActualBrushColor());
@@ -393,44 +322,13 @@ void IRAM_ATTR VGAController::clear(Rect & updateRect)
 
 // scroll < 0 -> scroll UP
 // scroll > 0 -> scroll DOWN
-// Speciying horizontal scrolling region slow-down scrolling!
-void IRAM_ATTR VGAController::VScroll(int scroll, Rect & updateRect)
+void VGA64Controller::VScroll(int scroll, Rect & updateRect)
 {
   genericVScroll(scroll, updateRect,
                  [&] (int yA, int yB, int x1, int x2)      { swapRows(yA, yB, x1, x2); },              // swapRowsCopying
                  [&] (int yA, int yB)                      { tswap(m_viewPort[yA], m_viewPort[yB]); }, // swapRowsPointers
                  [&] (int y, int x1, int x2, RGB888 color) { rawFillRow(y, x1, x2, preparePixel(color)); }         // rawFillRow
                 );
-
-  if (scroll != 0) {
-    // reassign DMA pointers
-    int viewPortBuffersPerLine = 0;
-    int linePos = 1;
-    switch (m_timings.HStartingBlock) {
-      case VGAScanStart::FrontPorch:
-        // FRONTPORCH -> SYNC -> BACKPORCH -> VISIBLEAREA
-        viewPortBuffersPerLine = (m_viewPortCol + m_viewPortWidth) < m_timings.HVisibleArea ? 3 : 2;
-        break;
-      case VGAScanStart::Sync:
-        // SYNC -> BACKPORCH -> VISIBLEAREA -> FRONTPORCH
-        viewPortBuffersPerLine = 3;
-        break;
-      case VGAScanStart::BackPorch:
-        // BACKPORCH -> VISIBLEAREA -> FRONTPORCH -> SYNC
-        viewPortBuffersPerLine = 3;
-        break;
-      case VGAScanStart::VisibleArea:
-        // VISIBLEAREA -> FRONTPORCH -> SYNC -> BACKPORCH
-        viewPortBuffersPerLine = m_viewPortCol > 0 ? 3 : 2;
-        linePos = m_viewPortCol > 0 ? 1 : 0;
-        break;
-    }
-    const int Y1 = paintState().scrollingRegion.Y1;
-    const int Y2 = paintState().scrollingRegion.Y2;
-    for (int i = Y1, idx = Y1 * m_timings.scanCount; i <= Y2; ++i)
-      for (int scan = 0; scan < m_timings.scanCount; ++scan, ++idx)
-        setDMABufferView(m_viewPortRow * m_timings.scanCount + idx * viewPortBuffersPerLine + linePos, i, scan, m_viewPort, false);
-  }
 }
 
 
@@ -438,7 +336,7 @@ void IRAM_ATTR VGAController::VScroll(int scroll, Rect & updateRect)
 // Scrolling by other values requires up to three steps (scopose scrolling by 1, 2, 3 or 4): for example scrolling by 5 is scomposed to 4 and 1, scrolling
 // by 6 is 4 + 2, etc.
 // Horizontal scrolling region start and size (X2-X1+1) must be aligned to 32 bits, otherwise the unoptimized (very slow) version is used.
-void IRAM_ATTR VGAController::HScroll(int scroll, Rect & updateRect)
+void VGA64Controller::HScroll(int scroll, Rect & updateRect)
 {
   hideSprites(updateRect);
   uint8_t pattern8   = preparePixel(getActualBrushColor());
@@ -579,7 +477,7 @@ void IRAM_ATTR VGAController::HScroll(int scroll, Rect & updateRect)
 }
 
 
-void IRAM_ATTR VGAController::drawGlyph(Glyph const & glyph, GlyphOptions glyphOptions, RGB888 penColor, RGB888 brushColor, Rect & updateRect)
+void VGA64Controller::drawGlyph(Glyph const & glyph, GlyphOptions glyphOptions, RGB888 penColor, RGB888 brushColor, Rect & updateRect)
 {
   auto mode = paintState().paintOptions.mode;
   auto getPixel = getPixelLambda(mode);
@@ -592,7 +490,7 @@ void IRAM_ATTR VGAController::drawGlyph(Glyph const & glyph, GlyphOptions glyphO
 }
 
 
-void IRAM_ATTR VGAController::invertRect(Rect const & rect, Rect & updateRect)
+void VGA64Controller::invertRect(Rect const & rect, Rect & updateRect)
 {
   genericInvertRect(rect, updateRect,
                     [&] (int Y, int X1, int X2) { rawInvertRow(Y, X1, X2); }
@@ -600,7 +498,7 @@ void IRAM_ATTR VGAController::invertRect(Rect const & rect, Rect & updateRect)
 }
 
 
-void IRAM_ATTR VGAController::swapFGBG(Rect const & rect, Rect & updateRect)
+void VGA64Controller::swapFGBG(Rect const & rect, Rect & updateRect)
 {
   genericSwapFGBG(rect, updateRect,
                   [&] (RGB888 const & color)                  { return preparePixel(color); },
@@ -613,7 +511,7 @@ void IRAM_ATTR VGAController::swapFGBG(Rect const & rect, Rect & updateRect)
 
 // Slow operation!
 // supports overlapping of source and dest rectangles
-void IRAM_ATTR VGAController::copyRect(Rect const & source, Rect & updateRect)
+void VGA64Controller::copyRect(Rect const & source, Rect & updateRect)
 {
   genericCopyRect(source, updateRect,
                   [&] (int y)                                 { return (uint8_t*) m_viewPort[y]; },
@@ -624,7 +522,7 @@ void IRAM_ATTR VGAController::copyRect(Rect const & source, Rect & updateRect)
 
 
 // no bounds check is done!
-void VGAController::readScreen(Rect const & rect, RGB888 * destBuf)
+void VGA64Controller::readScreen(Rect const & rect, RGB888 * destBuf)
 {
   for (int y = rect.Y1; y <= rect.Y2; ++y) {
     uint8_t * row = (uint8_t*) m_viewPort[y];
@@ -636,31 +534,7 @@ void VGAController::readScreen(Rect const & rect, RGB888 * destBuf)
 }
 
 
-// no bounds check is done!
-void VGAController::readScreen(Rect const & rect, RGB222 * destBuf)
-{
-  uint8_t * dbuf = (uint8_t*) destBuf;
-  for (int y = rect.Y1; y <= rect.Y2; ++y) {
-    uint8_t * row = (uint8_t*) m_viewPort[y];
-    for (int x = rect.X1; x <= rect.X2; ++x, ++dbuf)
-      *dbuf = VGA_PIXELINROW(row, x) & ~VGA_SYNC_MASK;
-  }
-}
-
-
-// no bounds check is done!
-void VGAController::writeScreen(Rect const & rect, RGB222 * srcBuf)
-{
-  uint8_t * sbuf = (uint8_t*) srcBuf;
-  for (int y = rect.Y1; y <= rect.Y2; ++y) {
-    uint8_t * row = (uint8_t*) m_viewPort[y];
-    for (int x = rect.X1; x <= rect.X2; ++x, ++sbuf)
-      VGA_PIXELINROW(row, x) = *sbuf | m_HVSync;
-  }
-}
-
-
-void IRAM_ATTR VGAController::rawDrawBitmap_Native(int destX, int destY, Bitmap const * bitmap, int X1, int Y1, int XCount, int YCount)
+void VGA64Controller::rawDrawBitmap_Native(int destX, int destY, Bitmap const * bitmap, int X1, int Y1, int XCount, int YCount)
 {
   genericRawDrawBitmap_Native(destX, destY, (uint8_t*) bitmap->data, bitmap->width, X1, Y1, XCount, YCount,
                               [&] (int y) { return (uint8_t*) m_viewPort[y]; },   // rawGetRow
@@ -669,7 +543,7 @@ void IRAM_ATTR VGAController::rawDrawBitmap_Native(int destX, int destY, Bitmap 
 }
 
 
-void IRAM_ATTR VGAController::rawDrawBitmap_Mask(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
+void VGA64Controller::rawDrawBitmap_Mask(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -683,7 +557,7 @@ void IRAM_ATTR VGAController::rawDrawBitmap_Mask(int destX, int destY, Bitmap co
 }
 
 
-void IRAM_ATTR VGAController::rawDrawBitmap_RGBA2222(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
+void VGA64Controller::rawDrawBitmap_RGBA2222(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -707,7 +581,7 @@ void IRAM_ATTR VGAController::rawDrawBitmap_RGBA2222(int destX, int destY, Bitma
 }
 
 
-void IRAM_ATTR VGAController::rawDrawBitmap_RGBA8888(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
+void VGA64Controller::rawDrawBitmap_RGBA8888(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -731,7 +605,7 @@ void IRAM_ATTR VGAController::rawDrawBitmap_RGBA8888(int destX, int destY, Bitma
 }
 
 
-void IRAM_ATTR VGAController::rawCopyToBitmap(int srcX, int srcY, int width, void * saveBuffer, int X1, int Y1, int XCount, int YCount)
+void VGA64Controller::rawCopyToBitmap(int srcX, int srcY, int width, void * saveBuffer, int X1, int Y1, int XCount, int YCount)
 {
   genericRawCopyToBitmap(srcX, srcY, width, (uint8_t*)saveBuffer, X1, Y1, XCount, YCount,
                         [&] (int y)                { return (uint8_t*) m_viewPort[y]; },  // rawGetRow
@@ -740,7 +614,7 @@ void IRAM_ATTR VGAController::rawCopyToBitmap(int srcX, int srcY, int width, voi
 }
 
 
-void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_Mask(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+void VGA64Controller::rawDrawBitmapWithMatrix_Mask(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -754,7 +628,7 @@ void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_Mask(int destX, int destY,
 }
 
 
-void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_RGBA2222(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+void VGA64Controller::rawDrawBitmapWithMatrix_RGBA2222(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -778,7 +652,7 @@ void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_RGBA2222(int destX, int de
 }
 
 
-void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
+void VGA64Controller::rawDrawBitmapWithMatrix_RGBA8888(int destX, int destY, Rect & drawingRect, Bitmap const * bitmap, const float * invMatrix)
 {
   auto paintMode = paintState().paintOptions.mode;
   auto setRowPixel = setRowPixelLambda(paintMode);
@@ -800,6 +674,60 @@ void IRAM_ATTR VGAController::rawDrawBitmapWithMatrix_RGBA8888(int destX, int de
                                           [&] (uint8_t * row, int x, RGBA8888 const & src) { setRowPixel(row, x, m_HVSync | (src.R >> 6) | (src.G >> 6 << 2) | (src.B >> 6 << 4)); }   // rawSetPixelInRow
                                          );
 }
+
+
+void IRAM_ATTR VGA64Controller::ISRHandler(void * arg)
+{
+  #if FABGLIB_VGAXCONTROLLER_PERFORMANCE_CHECK
+  auto s1 = getCycleCount();
+  #endif
+
+  auto ctrl = (VGA64Controller *) arg;
+
+  if (I2S1.int_st.out_eof) {
+
+    auto const desc = (lldesc_t*) I2S1.out_eof_des_addr;
+
+    if (desc == s_frameResetDesc) {
+      s_scanLine = 0;
+    }
+
+    auto const width  = ctrl->m_viewPortWidth;
+    auto const height = ctrl->m_viewPortHeight;
+    auto const lines  = ctrl->m_lines;
+
+    int scanLine = (s_scanLine + VGA64_LinesCount / 2) % height;
+
+    auto lineIndex = scanLine & (VGA64_LinesCount - 1);
+
+    for (int i = 0; i < VGA64_LinesCount / 2; ++i) {
+      auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
+      auto dest = (uint8_t*) lines[lineIndex];
+
+      memcpy(dest, src, width);
+
+      ctrl->decorateScanLinePixels(dest, scanLine);
+      ++lineIndex;
+      ++scanLine;
+    }
+
+    s_scanLine += VGA64_LinesCount / 2;
+
+    if (scanLine >= height && !ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
+      // vertical sync, unlock primitive execution task
+      // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
+      vTaskNotifyGiveFromISR(ctrl->m_primitiveExecTask, NULL);
+    }
+
+  }
+
+  #if FABGLIB_VGAXCONTROLLER_PERFORMANCE_CHECK
+  s_vgapalctrlcycles += getCycleCount() - s1;
+  #endif
+
+  I2S1.int_clr.val = I2S1.int_st.val;
+}
+
 
 
 } // end of namespace

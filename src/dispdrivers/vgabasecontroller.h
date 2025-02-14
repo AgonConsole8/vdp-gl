@@ -334,7 +334,7 @@ protected:
   virtual void swapBuffers();
 
   // chance to overwrite a scan line in the output DMA buffer
-  virtual void decorateScanLinePixels(uint8_t * pixels);
+  virtual void decorateScanLinePixels(uint8_t * pixels, uint16_t scanRow);
 
   // Processes primitives upon notification
   static void primitiveExecTask(void * arg);
@@ -367,7 +367,6 @@ protected:
 
   static lldesc_t volatile *  s_frameResetDesc;
   static volatile int         s_scanLine;
-  static volatile int         s_scanRow;
   static volatile int         s_scanWidth;
   static volatile int         s_viewPortHeight;
 

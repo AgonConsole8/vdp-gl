@@ -49,6 +49,7 @@ extern "C" {
 #include "dispdrivers/vgacontroller.h"
 #include "dispdrivers/vga2controller.h"
 #include "dispdrivers/vga16controller.h"
+#include "dispdrivers/vga64controller.h"
 #include "comdrivers/ps2controller.h"
 
 

@@ -57,7 +57,6 @@ volatile uint8_t * * VGABaseController::s_viewPort;
 volatile uint8_t * * VGABaseController::s_viewPortVisible;
 lldesc_t volatile *  VGABaseController::s_frameResetDesc;
 volatile int         VGABaseController::s_scanLine;
-volatile int         VGABaseController::s_scanRow;
 volatile int         VGABaseController::s_scanWidth;
 volatile int         VGABaseController::s_viewPortHeight;
 
@@ -778,8 +777,8 @@ void IRAM_ATTR VGABaseController::swapBuffers()
 
 
 // Chance to overwrite a scan line in the output DMA buffer.
-void IRAM_ATTR VGABaseController::decorateScanLinePixels(uint8_t * pixels) {
-  drawSpriteScanLine(pixels, s_scanRow, s_scanWidth, s_viewPortHeight);
+void IRAM_ATTR VGABaseController::decorateScanLinePixels(uint8_t * pixels, uint16_t scanRow) {
+  drawSpriteScanLine(pixels, scanRow, s_scanWidth, s_viewPortHeight);
 }
 
 // we can use getCycleCount here because primitiveExecTask is pinned to a specific core (so cycle counter is the same)

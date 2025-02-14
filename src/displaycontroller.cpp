@@ -174,6 +174,7 @@ Sprite::Sprite()
 
 Sprite::~Sprite()
 {
+  framesCount = 0;
   free(frames);
   free(savedBackground);
 }
@@ -181,26 +182,29 @@ Sprite::~Sprite()
 
 void Sprite::clearBitmaps()
 {
-  free(frames);
-  frames = nullptr;
   framesCount = 0;
+  auto framesPtr = frames;
+  frames = nullptr;
+  free(framesPtr);
 }
 
 
 Sprite * Sprite::addBitmap(Bitmap * bitmap)
 {
+  auto newFrames = (Bitmap**) realloc(frames, sizeof(Bitmap*) * (framesCount + 1));
+  newFrames[framesCount] = bitmap;
+  frames = newFrames;
   ++framesCount;
-  frames = (Bitmap**) realloc(frames, sizeof(Bitmap*) * framesCount);
-  frames[framesCount - 1] = bitmap;
   return this;
 }
 
 
 Sprite * Sprite::addBitmap(Bitmap * bitmap[], int count)
 {
-  frames = (Bitmap**) realloc(frames, sizeof(Bitmap*) * (framesCount + count));
+  auto newFrames = (Bitmap**) realloc(frames, sizeof(Bitmap*) * (framesCount + count));
   for (int i = 0; i < count; ++i)
-    frames[framesCount + i] = bitmap[i];
+    newFrames[framesCount + i] = bitmap[i];
+  frames = newFrames;
   framesCount += count;
   return this;
 }
@@ -645,6 +649,7 @@ void BitmappedDisplayController::setSprites(Sprite * sprites, int count, int spr
   suspendBackgroundPrimitiveExecution();
   auto updateRect = Rect(0, 0, getViewPortWidth() - 1, getViewPortHeight() - 1);
   hideSprites(updateRect);
+  m_spritesCount = 0;
   m_sprites      = sprites;
   m_spriteSize   = spriteSize;
   m_spritesCount = count;
@@ -654,7 +659,13 @@ void BitmappedDisplayController::setSprites(Sprite * sprites, int count, int spr
     uint8_t * spritePtr = (uint8_t*)m_sprites;
     for (int i = 0; i < m_spritesCount; ++i, spritePtr += m_spriteSize) {
       Sprite * sprite = (Sprite*) spritePtr;
-      if (sprite->hardware) continue;
+      if (sprite->hardware) {
+        if (sprite->savedBackground) {
+          free(sprite->savedBackground);
+          sprite->savedBackground = nullptr;
+        }
+        continue;
+      }
       int reqBackBufferSize = 0;
       for (int i = 0; i < sprite->framesCount; ++i)
         reqBackBufferSize = tmax(reqBackBufferSize, sprite->frames[i]->width * getBitmapSavePixelSize() * sprite->frames[i]->height);
@@ -816,8 +827,7 @@ void BitmappedDisplayController::setMouseCursorPos(int X, int Y)
 
 void BitmappedDisplayController::drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight) {
     // normal sprites
-    int spritesCnt = spritesCount();
-    for (int i = 0; i < spritesCnt; ++i) {
+    for (int i = 0; i < spritesCount(); ++i) {
       Sprite * sprite = getSprite(i);
       if (sprite->hardware &&
           sprite->visible && sprite->allowDraw && sprite->getFrame()) {

@@ -1098,7 +1098,7 @@ protected:
 
   Sprite * getSprite(int index);
 
-  int spritesCount() { return m_spritesCount; }
+  inline int spritesCount() { return m_spritesCount; }
 
   void hideSprites(Rect & updateRect);
 
@@ -1141,9 +1141,9 @@ private:
   bool                   m_backgroundPrimitiveExecutionEnabled; // when False primitives are execute immediately
   volatile bool          m_backgroundPrimitiveTimeoutEnabled;   // when False VSyncInterrupt() has not timeout
 
-  void *                 m_sprites;       // pointer to array of sprite structures
-  int                    m_spriteSize;    // size of sprite structure
-  int                    m_spritesCount;  // number of sprites in m_sprites array
+  volatile void *        m_sprites;       // pointer to array of sprite structures
+  volatile int           m_spriteSize;    // size of sprite structure
+  volatile int           m_spritesCount;  // number of sprites in m_sprites array
   bool                   m_spritesHidden; // true between hideSprites() and showSprites()
 
   // mouse cursor (mouse pointer) support

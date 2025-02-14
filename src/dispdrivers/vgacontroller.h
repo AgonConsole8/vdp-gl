@@ -52,7 +52,6 @@
 #include "dispdrivers/vgabasecontroller.h"
 
 
-#define VGA64_LinesCount 4
 
 
 namespace fabgl {
@@ -93,7 +92,6 @@ class VGAController : public VGABaseController {
 public:
 
   VGAController();
-  ~VGAController();
 
   // unwanted methods
   VGAController(VGAController const&)   = delete;
@@ -201,8 +199,6 @@ private:
   void init();
 
   void allocateViewPort();
-  void freeViewPort();
-  void checkViewPortSize();
   void onSetupDMABuffer(lldesc_t volatile * buffer, bool isStartOfVertFrontPorch, int scan, bool isVisible, int visibleRow);
 
   // methods to get lambdas to get/set pixels
@@ -292,7 +288,7 @@ private:
   // abstract method of BitmappedDisplayController
   int getBitmapSavePixelSize() { return 1; }
 
-  static void ISRHandler(void * arg);
+  static void VSyncInterrupt(void * arg);
 
 
   static VGAController * s_instance;
