@@ -109,9 +109,15 @@ VGA16Controller * VGA16Controller::s_instance = nullptr;
 
 
 VGA16Controller::VGA16Controller()
-  : VGAPalettedController(VGA16_LinesCount, VGA16_COLUMNSQUANTUM, NativePixelFormat::PALETTE16, 2, 1, ISRHandler)
+  : VGAPalettedController(VGA16_LinesCount, VGA16_COLUMNSQUANTUM, NativePixelFormat::PALETTE16, 2, 1, ISRHandler, 256 * sizeof(uint16_t))
 {
   s_instance = this;
+}
+
+
+VGA16Controller::~VGA16Controller()
+{
+  s_instance = nullptr;
 }
 
 
@@ -124,16 +130,14 @@ void VGA16Controller::setupDefaultPalette()
 }
 
 
-void VGA16Controller::setPaletteItem(int index, RGB888 const & color)
+void VGA16Controller::packSignals(int index, uint8_t packed222, void * signals)
 {
-  index %= 16;
-  m_palette[index] = color;
-  auto packed222 = RGB888toPackedRGB222(color);
+  auto _signals = (uint16_t *) signals;
   for (int i = 0; i < 16; ++i) {
-    m_packedPaletteIndexPair_to_signals[(index << 4) | i] &= 0xFF00;
-    m_packedPaletteIndexPair_to_signals[(index << 4) | i] |= (m_HVSync | packed222);
-    m_packedPaletteIndexPair_to_signals[(i << 4) | index] &= 0x00FF;
-    m_packedPaletteIndexPair_to_signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
+    _signals[(index << 4) | i] &= 0xFF00;
+    _signals[(index << 4) | i] |= (m_HVSync | packed222);
+    _signals[(i << 4) | index] &= 0x00FF;
+    _signals[(i << 4) | index] |= (m_HVSync | packed222) << 8;
   }
 }
 
@@ -726,11 +730,12 @@ void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
 
     auto const width  = ctrl->m_viewPortWidth;
     auto const height = ctrl->m_viewPortHeight;
-    auto const packedPaletteIndexPair_to_signals = (uint16_t const *) ctrl->m_packedPaletteIndexPair_to_signals;
-    auto const lines  = ctrl->m_lines;
-
     int scanLine = (s_scanLine + VGA16_LinesCount / 2) % height;
+    if (scanLine == 0) {
+      ctrl->m_currentSignalItem = ctrl->m_signalList;
+    }
 
+    auto const lines  = ctrl->m_lines;
     auto lineIndex = scanLine & (VGA16_LinesCount - 1);
 
     for (int i = 0; i < VGA16_LinesCount / 2; ++i) {
@@ -738,6 +743,7 @@ void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
       auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
       auto dest = (uint16_t*) lines[lineIndex];
       uint8_t* decpix = (uint8_t*) dest;
+      auto const packedPaletteIndexPair_to_signals = (uint16_t *) ctrl->getSignalsForScanline(scanLine);
 
       // optimization warn: horizontal resolution must be a multiple of 16!
       for (int col = 0; col < width; col += 16) {
@@ -783,10 +789,13 @@ void IRAM_ATTR VGA16Controller::ISRHandler(void * arg)
 
     s_scanLine += VGA16_LinesCount / 2;
 
-    if (scanLine >= height && !ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
-      // vertical sync, unlock primitive execution task
-      // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
-      vTaskNotifyGiveFromISR(ctrl->m_primitiveExecTask, NULL);
+    if (scanLine >= height) {
+      ctrl->frameCounter++;
+      if (!ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
+        // vertical sync, unlock primitive execution task
+        // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
+        vTaskNotifyGiveFromISR(ctrl->m_primitiveExecTask, NULL);
+      }
     }
 
   }

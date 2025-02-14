@@ -117,16 +117,15 @@ VGA4Controller * VGA4Controller::s_instance = nullptr;
 
 
 VGA4Controller::VGA4Controller()
-  : VGAPalettedController(VGA4_LinesCount, VGA4_COLUMNSQUANTUM, NativePixelFormat::PALETTE4, 4, 1, ISRHandler)
+  : VGAPalettedController(VGA4_LinesCount, VGA4_COLUMNSQUANTUM, NativePixelFormat::PALETTE4, 4, 1, ISRHandler, 256 * sizeof(uint32_t))
 {
   s_instance = this;
-  m_packedPaletteIndexQuad_to_signals = (uint32_t *) heap_caps_malloc(256 * sizeof(uint32_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
 }
 
 
 VGA4Controller::~VGA4Controller()
 {
-  heap_caps_free((void *)m_packedPaletteIndexQuad_to_signals);
+  s_instance = nullptr;
 }
 
 
@@ -139,13 +138,11 @@ void VGA4Controller::setupDefaultPalette()
 }
 
 
-void VGA4Controller::setPaletteItem(int index, RGB888 const & color)
+void VGA4Controller::packSignals(int index, uint8_t packed222, void * signals)
 {
-  index %= 4;
-  m_palette[index] = color;
-  auto packed222 = RGB888toPackedRGB222(color);
+  auto _signals = (uint32_t *) signals;
   for (int i = 0; i < 256; ++i) {
-    auto b = (uint8_t *) (m_packedPaletteIndexQuad_to_signals + i);
+    auto b = (uint8_t *) (_signals + i);
     for (int j = 0; j < 4; ++j) {
       auto aj = 6 - j * 2;
       if (((i >> aj) & 3) == index) {
@@ -738,11 +735,12 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
 
     auto const width  = ctrl->m_viewPortWidth;
     auto const height = ctrl->m_viewPortHeight;
-    auto const packedPaletteIndexQuad_to_signals = (uint32_t const *) ctrl->m_packedPaletteIndexQuad_to_signals;
-    auto const lines  = ctrl->m_lines;
-
     int scanLine = (s_scanLine + VGA4_LinesCount / 2) % height;
+    if (scanLine == 0) {
+      ctrl->m_currentSignalItem = ctrl->m_signalList;
+    }
 
+    auto const lines  = ctrl->m_lines;
     auto lineIndex = scanLine & (VGA4_LinesCount - 1);
 
     for (int i = 0; i < VGA4_LinesCount / 2; ++i) {
@@ -750,6 +748,7 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
       auto src  = (uint8_t const *) s_viewPortVisible[scanLine];
       auto dest = (uint32_t*) lines[lineIndex];
       uint8_t* decpix = (uint8_t*) dest;
+      auto const packedPaletteIndexQuad_to_signals = (uint32_t *) ctrl->getSignalsForScanline(scanLine);
 
       // optimization warn: horizontal resolution must be a multiple of 16!
       for (int col = 0; col < width; col += 16) {
@@ -782,10 +781,13 @@ void IRAM_ATTR VGA4Controller::ISRHandler(void * arg)
 
     s_scanLine += VGA4_LinesCount / 2;
 
-    if (scanLine >= height && !ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
-      // vertical sync, unlock primitive execution task
-      // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
-      vTaskNotifyGiveFromISR(ctrl->m_primitiveExecTask, NULL);
+    if (scanLine >= height) {
+      ctrl->frameCounter++;
+      if (!ctrl->m_primitiveProcessingSuspended && spi_flash_cache_enabled() && ctrl->m_primitiveExecTask) {
+        // vertical sync, unlock primitive execution task
+        // warn: don't use vTaskSuspendAll() in primitive drawing, otherwise vTaskNotifyGiveFromISR may be blocked and screen will flick!
+        vTaskNotifyGiveFromISR(ctrl->m_primitiveExecTask, NULL);
+      }
     }
 
   }

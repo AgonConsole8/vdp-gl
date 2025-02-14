@@ -60,16 +60,21 @@ namespace fabgl {
 /* VGAPalettedController definitions */
 
 
-VGAPalettedController::VGAPalettedController(int linesCount, int columnsQuantum, NativePixelFormat nativePixelFormat, int viewPortRatioDiv, int viewPortRatioMul, intr_handler_t isrHandler)
+VGAPalettedController::VGAPalettedController(int linesCount, int columnsQuantum, NativePixelFormat nativePixelFormat, int viewPortRatioDiv, int viewPortRatioMul, intr_handler_t isrHandler, int signalTableSize)
   : m_columnsQuantum(columnsQuantum),
     m_nativePixelFormat(nativePixelFormat),
     m_viewPortRatioDiv(viewPortRatioDiv),
     m_viewPortRatioMul(viewPortRatioMul),
-    m_isrHandler(isrHandler)
+    m_isrHandler(isrHandler),
+    m_signalTableSize(signalTableSize)
 {
   m_linesCount = linesCount;
   m_lines   = (volatile uint8_t**) heap_caps_malloc(sizeof(uint8_t*) * m_linesCount, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
   m_palette = (RGB222*) heap_caps_malloc(sizeof(RGB222) * getPaletteSize(), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  createPalette(0);
+  uint16_t signalList[2] = { 0, 0 };
+  m_signalList = createSignalList(signalList, 1);
+  m_currentSignalItem = m_signalList;
 }
 
 
@@ -77,6 +82,13 @@ VGAPalettedController::~VGAPalettedController()
 {
   heap_caps_free(m_palette);
   heap_caps_free(m_lines);
+  for (auto it = m_signalMaps.begin(); it != m_signalMaps.end();) {
+    if (it->second) {
+      heap_caps_free((void *)it->second);
+    }
+    it = m_signalMaps.erase(it);
+  }
+  deleteSignalList(m_signalList);
 }
 
 
@@ -138,8 +150,12 @@ void VGAPalettedController::setResolution(VGATimings const& timings, int viewPor
   for (int i = 0; i < m_viewPortHeight; ++i)
     memset((void*)(m_viewPort[i]), nativePixelFormat() == NativePixelFormat::SBGR2222 ? m_HVSync : 0, m_viewPortWidth / m_viewPortRatioDiv * m_viewPortRatioMul);
 
+  deletePalette(65535);
   setupDefaultPalette();
   updateRGB2PaletteLUT();
+
+  uint16_t signalList[2] = { 0, 0 };
+  updateSignalList(signalList, 1);
 
   calculateAvailableCyclesForDrawings();
 
@@ -189,6 +205,28 @@ int VGAPalettedController::getPaletteSize()
   }
 }
 
+void VGAPalettedController::setPaletteItem(int index, RGB888 const & color)
+{
+  setItemInPalette(0, index, color);
+}
+
+
+void VGAPalettedController::setItemInPalette(uint16_t paletteId, int index, RGB888 const & color)
+{
+  if (m_signalMaps.find(paletteId) == m_signalMaps.end()) {
+    if (!createPalette(paletteId)) {
+      return;
+    }
+  }
+  index %= getPaletteSize();
+  if (paletteId == 0) {
+    m_palette[index] = color;
+  }
+  auto packed222 = RGB888toPackedRGB222(color);
+  packSignals(index, packed222, m_signalMaps[paletteId]);
+}
+
+
 
 // rebuild m_packedRGB222_to_PaletteIndex
 void VGAPalettedController::updateRGB2PaletteLUT()
@@ -217,6 +255,141 @@ void VGAPalettedController::updateRGB2PaletteLUT()
         }
         m_packedRGB222_to_PaletteIndex[r | (g << 2) | (b << 4)] = bestIdx;
       }
+}
+
+
+bool VGAPalettedController::createPalette(uint16_t paletteId)
+{
+  if (m_signalTableSize == 0) {
+    return false;
+  }
+  if (m_signalMaps.find(paletteId) == m_signalMaps.end()) {
+    m_signalMaps[paletteId] = heap_caps_malloc(m_signalTableSize, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    if (!m_signalMaps[paletteId]) {
+      m_signalMaps.erase(paletteId);
+      // create failed
+      return false;
+    }
+    if (paletteId == 0) {
+      return true;
+    }
+  }
+  // Duplicate palette 0 into new palette
+  if (paletteId != 0) {
+    memcpy(m_signalMaps[paletteId], m_signalMaps[0], m_signalTableSize);
+  }
+  return true;
+}
+
+
+void VGAPalettedController::deletePalette(uint16_t paletteId)
+{
+  if (paletteId == 0) {
+    return;
+  }
+  if (paletteId == 65535) {
+    // iterate over all palettes and delete them using deletePalette
+    for (auto it = m_signalMaps.begin(); it != m_signalMaps.end(); ++it) {
+      deletePalette(it->first);
+    }
+    return;
+  }
+  if (m_signalMaps.find(paletteId) != m_signalMaps.end()) {
+    auto signals = m_signalMaps[paletteId];
+    auto signalItem = m_signalList;
+    while (signalItem) {
+      if (signalItem->signals == signals) {
+        signalItem->signals = m_signalMaps[0];
+      }
+      signalItem = signalItem->next;
+    }
+    heap_caps_free(m_signalMaps[paletteId]);
+    m_signalMaps.erase(paletteId);
+  }
+}
+
+
+void VGAPalettedController::deleteSignalList(PaletteListItem * item)
+{
+  if (item) {
+    deleteSignalList(item->next);
+    heap_caps_free(item);
+  }
+}
+
+
+void VGAPalettedController::updateSignalList(uint16_t * rawList, int entries)
+{
+  // Walk list, updating existing signal list
+  // creating new list if we exceed the current list,
+  // deleting any remaining items if we have fewer entries
+  PaletteListItem * item = m_signalList;
+  int row = 0;
+
+  while (entries) {
+    auto rows = rawList[0];
+    auto paletteID = rawList[1];
+    rawList += 2;
+
+    row += rows;
+    item->endRow = row;
+    if (m_signalMaps.find(paletteID) != m_signalMaps.end()) {
+      item->signals = m_signalMaps[paletteID];
+    } else {
+      item->signals = m_signalMaps[0];
+    }
+
+    entries--;
+
+    if (entries) {
+      if (item->next) {
+        item = item->next;
+      } else {
+        item->next = createSignalList(rawList, entries, row);
+        return;
+      }
+    }
+  }
+
+  if (item->next) {
+    deleteSignalList(item->next);
+    item->next = NULL;
+  }
+}
+
+
+PaletteListItem * VGAPalettedController::createSignalList(uint16_t * rawList, int entries, int row)
+{
+  PaletteListItem * item = (PaletteListItem *) heap_caps_malloc(sizeof(PaletteListItem), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  auto rows = rawList[0];
+  auto paletteID = rawList[1];
+
+  item->endRow = row + rows;
+
+  if (m_signalMaps.find(paletteID) != m_signalMaps.end()) {
+    item->signals = m_signalMaps[paletteID];
+  } else {
+    item->signals = m_signalMaps[0];
+  }
+
+  if (entries > 1) {
+    item->next = createSignalList(rawList + 2, entries - 1, row + rows);
+  } else {
+    item->next = NULL;
+  }
+
+  return item;
+}
+
+
+void * IRAM_ATTR VGAPalettedController::getSignalsForScanline(int scanLine) {
+  if (scanLine < m_currentSignalItem->endRow) {
+    return m_currentSignalItem->signals;
+  }
+  while (m_currentSignalItem->next && (scanLine >= m_currentSignalItem->endRow)) {
+    m_currentSignalItem = m_currentSignalItem->next;
+  }
+  return m_currentSignalItem->signals;
 }
 
 

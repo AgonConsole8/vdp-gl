@@ -109,6 +109,8 @@ protected:
 
   void setupDefaultPalette();
 
+  void packSignals(int index, uint8_t packed222, void * signals) {};
+
 
 private:
 
