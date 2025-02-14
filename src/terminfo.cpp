@@ -119,7 +119,7 @@ const TermInfoVideoConv videoConv_ADM3A[] = {
   // 'ESC G <' => Char Attribute: Underline reverse
   { "\eG<", 3, { ConvCtrl::AttrUnderline, ConvCtrl::AttrReverse, ConvCtrl::END} },
 
-  // 'ESC G >' => Char Attribute: Underline, reverse, bliking
+  // 'ESC G >' => Char Attribute: Underline, reverse, blinking
   { "\eG>", 3, { ConvCtrl::AttrUnderline, ConvCtrl::AttrReverse, ConvCtrl::AttrBlink, ConvCtrl::END} },
 
   // 'ESC G @' => Char Attribute: Reduce
@@ -495,44 +495,59 @@ const TermInfo term_ANSILegacy = {
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ADDS25 (Maybe ADDS40 - documentation needs confirmation)
+// ADDS25 with ADDS40 highlighting codes based on LSI Host6A documentation
 
 
 // sorted by TermSeq name
 const TermInfoVideoConv videoConv_ADDS25[] = {
+  // SOH => Cursor Home
+  { "\x01", 1, { ConvCtrl::CursorHome, ConvCtrl::END} },
+
+  //  ACK => Cursor Forward
+  { "\x07", 1, { ConvCtrl::CursorRight, ConvCtrl::END } },
+
   // BS => Cursor Left
   { "\x08", 1, { ConvCtrl::CursorLeft, ConvCtrl::END } },
 
-  // VT => Cursor Up
-  { "\x0b", 1, { ConvCtrl::CursorUp, ConvCtrl::END} },
+  // FF => Erase All
+  { "\x0c", 1, { ConvCtrl::CursorHome, ConvCtrl::EraseToEndOfScreen, ConvCtrl::END} },
 
-  // FF => Cursor Right
-  { "\x0c", 1, { ConvCtrl::CursorRight, ConvCtrl::END} },
+  //  NAK => Cursor Backward
+  { "\x15", 1, { ConvCtrl::CursorLeft, ConvCtrl::END } },
 
-  // SUB => Cursor home and Clear screen
-  { "\x1a", 1, { ConvCtrl::CursorHome, ConvCtrl::EraseToEndOfScreen, ConvCtrl::END} },
-
-  // RS => Cursor Home
-  { "\x1e", 1, { ConvCtrl::CursorHome, ConvCtrl::END} },
-
-  // US => New line
-  { "\x1f", 1, { ConvCtrl::CarriageReturn, ConvCtrl::LineFeed, ConvCtrl::END} },
+  // SUB => Cursor Up
+  { "\x1a", 1, { ConvCtrl::CursorUp, ConvCtrl::END} },
 
   // 'ESC Y y x' => Cursor Position (cursorX = x-31, cursorY = y-31)
   { "\eY\xff\xff", 4, { ConvCtrl::CursorPos, ConvCtrl::END} },
 
-  // 'ESC G 4' => Char Attribute: Reverse
-  { "\eG4", 3, { ConvCtrl::AttrReverse, ConvCtrl::END} },
+  // 'ESC G 0' => Char Attribute: GENTLE VERSION - turn off, don't use Normal video mode. This preserves colour.
+  // { "\eG0", 3, { ConvCtrl::AttrNormal, ConvCtrl::END} },
+  { "\eG0", 3, { ConvCtrl::AttrReverseOff, ConvCtrl::AttrUnderlineOff, ConvCtrl::AttrBlinkOff, ConvCtrl::AttrReduceOff, ConvCtrl::END} },
 
-  // 'ESC G 8' => Char Attribute: Underline
-  { "\eG8", 3, { ConvCtrl::AttrUnderline, ConvCtrl::END} },
+  // 'ESC G 1' => Char Attribute: Blank
+  { "\eG1", 3, { ConvCtrl::AttrBlank, ConvCtrl::END} },
 
   // 'ESC G 2' => Char Attribute: Blink
   { "\eG2", 3, { ConvCtrl::AttrBlink, ConvCtrl::END} },
 
-  // 'ESC G 0' => Char Attribute: GENTLE VERSION - turn off, don't use Normal video mode. This preserves colour.
-  // { "\eG0", 3, { ConvCtrl::AttrNormal, ConvCtrl::END} },
-  { "\eG0", 3, { ConvCtrl::AttrReverseOff, ConvCtrl::AttrUnderlineOff, ConvCtrl::AttrBlinkOff, ConvCtrl::AttrReduceOff, ConvCtrl::END} },
+  // 'ESC G 4' => Char Attribute: Reverse
+  { "\eG4", 3, { ConvCtrl::AttrReverse, ConvCtrl::END} },
+
+  // 'ESC G 6' => Char Attribute: Reverse blinking
+  { "\eG6", 3, { ConvCtrl::AttrReverse, ConvCtrl::AttrBlink, ConvCtrl::END} },
+
+  // 'ESC G 8' => Char Attribute: Underline
+  { "\eG8", 3, { ConvCtrl::AttrUnderline, ConvCtrl::END} },
+
+  // 'ESC G :' => Char Attribute: Underline blinking
+  { "\eG:", 3, { ConvCtrl::AttrUnderline, ConvCtrl::AttrBlink, ConvCtrl::END} },
+
+  // 'ESC G <' => Char Attribute: Underline reverse
+  { "\eG<", 3, { ConvCtrl::AttrUnderline, ConvCtrl::AttrReverse, ConvCtrl::END} },
+
+  // 'ESC G >' => Char Attribute: Underline, reverse, blinking
+  { "\eG>", 3, { ConvCtrl::AttrUnderline, ConvCtrl::AttrReverse, ConvCtrl::AttrBlink, ConvCtrl::END} },
 
   // 'ESC )' => Char Attribute: Half intensity ON
   { "\e)", 2, { ConvCtrl::AttrReduce, ConvCtrl::END} },
@@ -561,8 +576,8 @@ const TermInfoVideoConv videoConv_ADDS25[] = {
   // 'ESC *' => Cursor home and Clear screen
   { "\e*", 2, { ConvCtrl::CursorHome, ConvCtrl::EraseToEndOfScreen, ConvCtrl::END} },
 
-  // 'ESC .' => Toggle CursorOn/Off - how?? will need to code somehow - maybe done totally differently.
-  { "\e.", 2, { ConvCtrl::CursorOn, ConvCtrl::END} },
+  // 'ESC .' => Toggle CursorOn/Off
+  { "\e.", 2, { ConvCtrl::ToggleCursorOnOff, ConvCtrl::END} },
 
   // 'ESC 1' => Set Tab Stop
   { "\e1", 2, { ConvCtrl::SetTabStop, ConvCtrl::END} },
@@ -572,8 +587,7 @@ const TermInfoVideoConv videoConv_ADDS25[] = {
 
   // NOT SUPPORTED YET:
   // Back tab
-  // toggle cursor on/off
-  // Extra modes for text features - invisible, combinations of underline
+  // position horizontal (DLE), position vertical (VT)
   // toggle autoscroll on/off
   // enable keyboard
   // disable keyboard

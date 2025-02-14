@@ -80,6 +80,7 @@ enum class ConvCtrl {
   RestoreCursor,            /**<    */
   SetTabStop,               /**<    */
   ResetTabStop,             /**<    */
+  ToggleCursorOnOff,        /**<    */
 };
 
 
