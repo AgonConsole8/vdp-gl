@@ -702,8 +702,7 @@ void IRAM_ATTR BitmappedDisplayController::hideSprites(Rect & updateRect)
       // restore saved backgrounds
       for (int i = spritesCount() - 1; i >= 0; --i) {
         Sprite * sprite = getSprite(i);
-        if (!sprite->hardware &&
-            sprite->allowDraw && sprite->savedBackgroundWidth > 0) {
+        if (sprite->allowDraw && sprite->savedBackgroundWidth > 0) {
           int savedX = sprite->savedX;
           int savedY = sprite->savedY;
           int savedWidth  = sprite->savedBackgroundWidth;
