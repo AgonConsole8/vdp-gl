@@ -182,6 +182,7 @@ protected:
 
   void * getSignalsForScanline(int scanline);
 
+  void decorateScanLinePixels(uint8_t * pixels, uint16_t scanRow);
 
   RGB222 *                    m_palette;
 
@@ -203,6 +204,8 @@ private:
 
   PaletteListItem * createSignalList(uint16_t * rawList, int entries, int row = 0);
   void deleteSignalList(PaletteListItem * item);
+
+  void drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight);
 
   uint8_t                     m_packedRGB222_to_PaletteIndex[64];
 

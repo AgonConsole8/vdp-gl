@@ -776,11 +776,6 @@ void IRAM_ATTR VGABaseController::swapBuffers()
 }
 
 
-// Chance to overwrite a scan line in the output DMA buffer.
-void IRAM_ATTR VGABaseController::decorateScanLinePixels(uint8_t * pixels, uint16_t scanRow) {
-  drawSpriteScanLine(pixels, scanRow, s_scanWidth, s_viewPortHeight);
-}
-
 // we can use getCycleCount here because primitiveExecTask is pinned to a specific core (so cycle counter is the same)
 // getCycleCount() requires 0.07us, while esp_timer_get_time() requires 0.78us
 void VGABaseController::primitiveExecTask(void * arg)

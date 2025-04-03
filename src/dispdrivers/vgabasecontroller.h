@@ -336,9 +336,6 @@ protected:
   // abstract method of BitmappedDisplayController
   virtual void swapBuffers();
 
-  // chance to overwrite a scan line in the output DMA buffer
-  virtual void decorateScanLinePixels(uint8_t * pixels, uint16_t scanRow);
-
   // Processes primitives upon notification
   static void primitiveExecTask(void * arg);
 
