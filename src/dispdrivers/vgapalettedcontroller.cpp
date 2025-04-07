@@ -433,6 +433,7 @@ void IRAM_ATTR VGAPalettedController::drawSpriteScanLine(uint8_t * pixelData, in
         (spriteXend > scanWidth ?
           scanWidth - spriteX :
           spriteWidth - offsetX);
+      if (drawWidth <= 0) continue;
 
       switch (spriteFrame->format) {
         case PixelFormat::RGBA8888: {
@@ -453,41 +454,14 @@ void IRAM_ATTR VGAPalettedController::drawSpriteScanLine(uint8_t * pixelData, in
 
         case PixelFormat::RGBA2222: {
             auto src = spriteFrame->data + (offsetY * spriteWidth) + offsetX;
-            pixelData += spriteX + offsetX;
-            auto hv4 = (((uint32_t) m_HVSync) << 24) |
-                      (((uint32_t) m_HVSync) << 16) |
-                      (((uint32_t) m_HVSync) << 8) |
-                      ((uint32_t) m_HVSync);
-
-            while (drawWidth) {
-              if (drawWidth >= 4 && !((uint32_t)(void*)pixelData & 3))
-              {
-                // Do a full word (4 pixels)
-                auto src_pix = *((uint32_t*)src);
-                auto alphas = src_pix & 0xC0C0C0C0; 
-                if (alphas == 0xC0C0C0C0) {
-                  src_pix = (src_pix & 0x3F3F3F3F) | hv4; 
-                  *((uint32_t*)pixelData) = (src_pix << 16) | (src_pix >> 16);
-                  src += 4;
-                  pixelData += 4;
-                  drawWidth -= 4;
-                  continue;
-                } else if (alphas == 0x00000000) {
-                  src += 4;
-                  pixelData += 4;
-                  drawWidth -= 4;
-                  continue;
-                }
-              }
-
-              // Just do a single byte (1 pixel)
+            auto pos = spriteX + offsetX;
+            while (drawWidth--) {
               if (*src & 0xC0) {
                 auto rgb = *src & 0x3F;
-                *((uint8_t*)(((uint32_t)(void*)pixelData)^2)) = rgb | m_HVSync;
+                pixelData[pos^2] = rgb | m_HVSync;
               }
               src++;
-              pixelData++;
-              drawWidth--;
+              pos++;
             }
           }
           break;
