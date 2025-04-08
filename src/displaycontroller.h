@@ -1104,8 +1104,6 @@ protected:
 
   void showSprites(Rect & updateRect);
 
-  void drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight);
-
   void drawBitmap(BitmapDrawingInfo const & bitmapDrawingInfo, Rect & updateRect);
 
   void absDrawBitmap(int destX, int destY, Bitmap const * bitmap, void * saveBackground, bool ignoreClippingRect);

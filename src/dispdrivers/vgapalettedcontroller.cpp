@@ -401,6 +401,74 @@ void VGAPalettedController::swapBuffers()
 }
 
 
+// Chance to overwrite a scan line in the output DMA buffer.
+void IRAM_ATTR VGAPalettedController::decorateScanLinePixels(uint8_t * pixels, uint16_t scanRow) {
+  drawSpriteScanLine(pixels, scanRow, s_scanWidth, s_viewPortHeight);
+}
+
+
+void IRAM_ATTR VGAPalettedController::drawSpriteScanLine(uint8_t * pixelData, int scanRow, int scanWidth, int viewportHeight) {
+  // normal sprites
+  for (int i = 0; i < spritesCount(); ++i) {
+    Sprite * sprite = getSprite(i);
+    if (sprite->hardware &&
+        sprite->visible && sprite->allowDraw && sprite->getFrame()) {
+      auto spriteFrame = sprite->getFrame();
+      int spriteWidth = spriteFrame->width;
+      int spriteHeight = spriteFrame->height;
+
+      int spriteY = sprite->y;
+      int spriteYend = spriteY + spriteHeight;
+      if (scanRow < spriteY) continue;
+      if (scanRow >= spriteYend) continue;
+      int offsetY = scanRow - spriteY;
+
+      int spriteX = sprite->x;
+      if (spriteX >= scanWidth) continue;
+      int spriteXend = spriteX + spriteWidth;
+      if (spriteXend <= 0) continue;
+
+      int offsetX = (spriteX < 0 ? -spriteX : 0);
+      int drawWidth =
+        (spriteXend > scanWidth ?
+          scanWidth - spriteX :
+          spriteWidth - offsetX);
+      if (drawWidth <= 0) continue;
+
+      switch (spriteFrame->format) {
+        case PixelFormat::RGBA8888: {
+            auto src = (const uint32_t*)(spriteFrame->data) + (offsetY * spriteWidth) + offsetX;
+            auto pos = spriteX + offsetX;
+            while (drawWidth--) {
+              auto src_pix = *src++;
+              if (src_pix & 0xFF000000) {
+                auto r = (src_pix & 0x000000C0) >> (8-2);
+                auto g = (src_pix & 0x0000C000) >> (16-4);
+                auto b = (src_pix & 0x00C00000) >> (24-6);
+                pixelData[pos^2] = r | g | b | m_HVSync;
+              }
+              pos++;
+            }
+          }
+          break;
+
+        case PixelFormat::RGBA2222: {
+            auto src = spriteFrame->data + (offsetY * spriteWidth) + offsetX;
+            auto pos = spriteX + offsetX;
+            while (drawWidth--) {
+              if (*src & 0xC0) {
+                auto rgb = *src & 0x3F;
+                pixelData[pos^2] = rgb | m_HVSync;
+              }
+              src++;
+              pos++;
+            }
+          }
+          break;
+      }
+    }
+  }
+}
 
 } // end of namespace
 
