@@ -82,6 +82,7 @@ void VGABaseController::init()
   m_taskProcessingPrimitives     = false;
   m_primitiveExecTask            = nullptr;
   m_processPrimitivesOnBlank     = false;
+  m_saveViewPort                 = nullptr;
 
   m_GPIOStream.begin();
 }
@@ -120,6 +121,8 @@ void VGABaseController::begin()
 
 void VGABaseController::end()
 {
+  restoreDrawingToScreen(); // to delete extra array if it exists
+
   if (m_DMABuffers) {
     suspendBackgroundPrimitiveExecution();
     vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -772,6 +775,44 @@ void IRAM_ATTR VGABaseController::swapBuffers()
   if (m_doubleBufferOverDMA) {
     tswap(m_DMABuffers, m_DMABuffersVisible);
     m_DMABuffersHead->qe.stqe_next = (lldesc_t*) &m_DMABuffersVisible[0];
+  }
+}
+
+
+void VGABaseController::redirectDrawingToBitmap(Bitmap * bitmap) {
+  uint16_t line_size;
+  switch (format) {
+    case PixelFormat::Undefined:
+    case PixelFormat::Native:
+      return;
+    case PixelFormat::Mask:
+      line_size = (width + 7) / 8;
+      break;
+    case PixelFormat::RGBA2222:
+      line_size = width;
+      break;
+    case PixelFormat::RGBA8888:
+      line_size = width * 4;
+      break;
+  }
+  uint8_t** lines = new uint8_t*[bitmap->height];
+  if (lines) {
+    auto line_address = bitmap->data;
+    for (int i = 0; i < bitmap->height; i++) {
+      lines[i] = line_address;
+      line_address += line_size;
+    }
+    m_saveViewPort = m_viewPort;
+    m_viewPort = lines;
+  }
+}
+
+
+void VGABaseController::restoreDrawingToScreen() {
+  if (m_saveViewPort && m_viewPort) {
+    delete [] m_viewPort;
+    m_viewPort = m_saveViewPort;
+    m_saveViewPort = nullptr;
   }
 }
 
