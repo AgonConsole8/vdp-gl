@@ -801,6 +801,16 @@ public:
   void drawBitmap(int X, int Y, Bitmap const * bitmap);
 
   /**
+   * @brief Redirects drawing to a bitmap.
+   *
+   * If the bitmap parameter is non-null, the given bitmap is used for drawing.
+   * If the bitmap parameter is null, drawing is directed back to the screen.
+   *
+   * @param bitmap Pointer to bitmap structure, or null.
+   */
+  void redirectDrawing(Bitmap const * bitmap);
+
+  /**
    * @brief Copies an area of screen to a bitmap from specified position.
    *
    * The bitmap provided must be a "native" format bitmap (one byte per pixel).

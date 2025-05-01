@@ -341,8 +341,7 @@ protected:
 
   void calculateAvailableCyclesForDrawings();
 
-  void redirectDrawingToBitmap(Bitmap * bitmap);
-  void restoreDrawingToScreen();
+  virtual void redirectDrawing(Bitmap const * bitmap);
 
   // when double buffer is enabled the "drawing" view port is always m_viewPort, while the "visible" view port is always m_viewPortVisible
   // when double buffer is not enabled then m_viewPort = m_viewPortVisible

@@ -232,6 +232,14 @@ enum PrimitiveCmd : uint8_t {
   // Set line options
   // params: lineOptions
   SetLineOptions,
+
+  // Redirect drawing to/from a bitmap
+  // params: bitmapDrawingInfo
+  //
+  // If bitmap pointer is non-null, drawing goes to a bitmap (temporarily).
+  // If bitmap pointer is null, drawing goes back to the screen.
+  // X and Y values are ignored.
+  RedirectDrawing,
 };
 
 
@@ -1125,6 +1133,8 @@ protected:
   Sprite * mouseCursor() { return &m_mouseCursor; }
 
   void resetPaintState();
+
+  virtual void redirectDrawing(Bitmap const * bitmap) = 0;
 
 private:
 

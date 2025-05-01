@@ -588,6 +588,19 @@ void Canvas::drawBitmap(int X, int Y, Bitmap const * bitmap)
 }
 
 
+void Canvas::redirectDrawing(Bitmap const * bitmap)
+{
+  Primitive p;
+  p.cmd = PrimitiveCmd::RedirectDrawing;
+  if (bitmap) {
+    p.bitmapDrawingInfo = BitmapDrawingInfo(0, 0, bitmap);
+  } else {
+    p.bitmapDrawingInfo = BitmapDrawingInfo(0, 0, nullptr);
+  }
+  m_displayController->addPrimitive(p);
+}
+
+
 void Canvas::copyToBitmap(int srcX, int srcY, Bitmap const * bitmap)
 {
   if (bitmap->format != PixelFormat::RGBA2222) return;

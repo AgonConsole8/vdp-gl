@@ -121,7 +121,7 @@ void VGABaseController::begin()
 
 void VGABaseController::end()
 {
-  restoreDrawingToScreen(); // to delete extra array if it exists
+  redirectDrawing(nullptr); // to delete extra array if it exists
 
   if (m_DMABuffers) {
     suspendBackgroundPrimitiveExecution();
@@ -779,40 +779,41 @@ void IRAM_ATTR VGABaseController::swapBuffers()
 }
 
 
-void VGABaseController::redirectDrawingToBitmap(Bitmap * bitmap) {
-  uint16_t line_size;
-  switch (format) {
-    case PixelFormat::Undefined:
-    case PixelFormat::Native:
-      return;
-    case PixelFormat::Mask:
-      line_size = (width + 7) / 8;
-      break;
-    case PixelFormat::RGBA2222:
-      line_size = width;
-      break;
-    case PixelFormat::RGBA8888:
-      line_size = width * 4;
-      break;
-  }
-  uint8_t** lines = new uint8_t*[bitmap->height];
-  if (lines) {
-    auto line_address = bitmap->data;
-    for (int i = 0; i < bitmap->height; i++) {
-      lines[i] = line_address;
-      line_address += line_size;
+void VGABaseController::redirectDrawing(Bitmap const * bitmap) {
+  if (bitmap) {
+    // Redirect drawing to a bitmap
+    uint16_t line_size;
+    switch (bitmap->format) {
+      case PixelFormat::Undefined:
+      case PixelFormat::Native:
+        return;
+      case PixelFormat::Mask:
+        line_size = (bitmap->width + 7) / 8;
+        break;
+      case PixelFormat::RGBA2222:
+        line_size = bitmap->width;
+        break;
+      case PixelFormat::RGBA8888:
+        line_size = bitmap->width * 4;
+        break;
     }
-    m_saveViewPort = m_viewPort;
-    m_viewPort = lines;
-  }
-}
-
-
-void VGABaseController::restoreDrawingToScreen() {
-  if (m_saveViewPort && m_viewPort) {
-    delete [] m_viewPort;
-    m_viewPort = m_saveViewPort;
-    m_saveViewPort = nullptr;
+    volatile uint8_t** lines = new volatile uint8_t*[bitmap->height];
+    if (lines) {
+      auto line_address = bitmap->data;
+      for (int i = 0; i < bitmap->height; i++) {
+        lines[i] = line_address;
+        line_address += line_size;
+      }
+      m_saveViewPort = m_viewPort;
+      m_viewPort = lines;
+    }
+  } else {
+    // Return drawing to the screen
+    if (m_saveViewPort && m_viewPort) {
+      delete [] m_viewPort;
+      m_viewPort = m_saveViewPort;
+      m_saveViewPort = nullptr;
+    }
   }
 }
 
