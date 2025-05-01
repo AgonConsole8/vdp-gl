@@ -801,14 +801,17 @@ public:
   void drawBitmap(int X, int Y, Bitmap const * bitmap);
 
   /**
-   * @brief Redirects drawing to a bitmap.
+   * @brief Redirects drawing to a buffer.
    *
-   * If the bitmap parameter is non-null, the given bitmap is used for drawing.
-   * If the bitmap parameter is null, drawing is directed back to the screen.
+   * If the data parameter is non-null, the given info is used for drawing.
+   * If the data parameter is null, drawing is directed back to the screen.
    *
-   * @param bitmap Pointer to bitmap structure, or null.
+   * @param data Pointer to buffer data, or null.
+   * @param width Number of pixels per row.
+   * @param height Number of rows.
+   * @param colors Number of colors (2, 4, 16, or 64).
    */
-  void redirectDrawing(Bitmap const * bitmap);
+  void redirectDrawing(uint8_t * data, uint16_t width, uint16_t height, uint8_t colors);
 
   /**
    * @brief Copies an area of screen to a bitmap from specified position.

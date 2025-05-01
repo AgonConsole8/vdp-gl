@@ -548,6 +548,12 @@ struct BitmapDrawingInfo {
   BitmapDrawingInfo(int X_, int Y_, Bitmap const * bitmap_) : X(X_), Y(Y_), bitmap(bitmap_) { }
 } __attribute__ ((packed));
 
+struct RedirectDrawingInfo {
+  uint8_t *     data;
+  uint16_t      width;
+  uint16_t      height;
+  uint8_t       colors;
+};
 
 struct BitmapTransformedDrawingInfo {
   int16_t        X;
@@ -726,6 +732,7 @@ struct Primitive {
     LinePattern            linePattern;
     LineOptions            lineOptions;
     TaskHandle_t           notifyTask;
+    RedirectDrawingInfo    redirectDrawingInfo;
   } __attribute__ ((packed));
 
   Primitive() { }
@@ -1134,7 +1141,7 @@ protected:
 
   void resetPaintState();
 
-  virtual void redirectDrawing(Bitmap const * bitmap) = 0;
+  virtual void redirectDrawing(const RedirectDrawingInfo * redirectDrawingInfo) = 0;
 
 private:
 

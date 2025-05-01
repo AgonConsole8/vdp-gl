@@ -588,11 +588,21 @@ void Canvas::drawBitmap(int X, int Y, Bitmap const * bitmap)
 }
 
 
-void Canvas::redirectDrawing(Bitmap const * bitmap)
+void Canvas::redirectDrawing(uint8_t * data, uint16_t width, uint16_t height, uint8_t colors)
 {
   Primitive p;
   p.cmd = PrimitiveCmd::RedirectDrawing;
-  p.bitmapDrawingInfo = BitmapDrawingInfo(0, 0, bitmap);
+  if (data) {
+    p.redirectDrawingInfo.data = data;
+    p.redirectDrawingInfo.width = width;
+    p.redirectDrawingInfo.height = height;
+    p.redirectDrawingInfo.colors = colors;
+  } else {
+    p.redirectDrawingInfo.data = nullptr;
+    p.redirectDrawingInfo.width = 0;
+    p.redirectDrawingInfo.height = 0;
+    p.redirectDrawingInfo.colors = 0;
+  }
   m_displayController->addPrimitive(p);
 }
 

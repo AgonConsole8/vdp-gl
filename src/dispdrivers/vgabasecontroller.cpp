@@ -779,29 +779,15 @@ void IRAM_ATTR VGABaseController::swapBuffers()
 
 extern "C" { extern bool cansavept; }
 
-void VGABaseController::redirectDrawing(Bitmap const * bitmap) {
-  if (bitmap) {
-    // Redirect drawing to a bitmap
-    uint16_t line_size;
-    switch (bitmap->format) {
-      case PixelFormat::Undefined:
-      case PixelFormat::Native:
-        return;
-      case PixelFormat::Mask:
-        line_size = (bitmap->width + 7) / 8;
-        break;
-      case PixelFormat::RGBA2222:
-        line_size = bitmap->width;
-        break;
-      case PixelFormat::RGBA8888:
-        line_size = bitmap->width * 4;
-        break;
-    }
+void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDrawingInfo) {
+  if (redirectDrawingInfo && redirectDrawingInfo->data) {
+    // Redirect drawing to a buffer
+    uint16_t line_size = redirectDrawingInfo->width;
     volatile uint8_t** lines = (volatile uint8_t **)
-      heap_caps_malloc(sizeof(uint8_t*) * bitmap->height, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
+      heap_caps_malloc(sizeof(uint8_t*) * redirectDrawingInfo->height, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
     if (lines) {
-      auto line_address = bitmap->data;
-      for (int i = 0; i < bitmap->height; i++) {
+      auto line_address = redirectDrawingInfo->data;
+      for (int i = 0; i < redirectDrawingInfo->height; i++) {
         lines[i] = line_address;
         line_address += line_size;
       }
