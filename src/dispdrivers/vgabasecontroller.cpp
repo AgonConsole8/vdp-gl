@@ -46,8 +46,6 @@
 #pragma GCC optimize ("O2")
 
 
-extern void debug_log(const char* fmt, ...);
-
 namespace fabgl {
 
 #if FABGLIB_VGAXCONTROLLER_PERFORMANCE_CHECK
@@ -801,45 +799,20 @@ void VGABaseController::redirectDrawing(Bitmap const * bitmap) {
     volatile uint8_t** lines = (volatile uint8_t **)
       heap_caps_malloc(sizeof(uint8_t*) * bitmap->height, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
     if (lines) {
-      debug_log("Redirect drawing to bitmap %X (%hux%hu), line size %hu\n",
-                bitmap, bitmap->width, bitmap->height, line_size);
-      debug_log("@%i %X\n", __LINE__, bitmap);
-      delay(3000);
-      debug_log("@%i %X\n", __LINE__, bitmap);
       auto line_address = bitmap->data;
-      debug_log("@%i %X\n", __LINE__, bitmap);
-      debug_log("Bitmap %X, data at %X\n", bitmap, line_address);
-      debug_log("@%i\n", __LINE__);
-      delay(3000);
-      debug_log("@%i\n", __LINE__);
       for (int i = 0; i < bitmap->height; i++) {
-      debug_log("@%i\n", __LINE__);
-        debug_log("[%i] %X\n", i, line_address);
-        debug_log("@%i\n", __LINE__);
-        delay(100);
-        debug_log("@%i\n", __LINE__);
         lines[i] = line_address;
         line_address += line_size;
       }
       m_saveViewPort = m_viewPort;
       m_viewPort = lines;
-      debug_log("Viewport lines: orig %X, temp %X\n", m_saveViewPort, m_viewPort);
-      delay(3000);
-    } else {
-      debug_log("Failed to allocate lines\n");
     }
   } else {
     // Return drawing to the screen
     if (m_saveViewPort && m_viewPort) {
-      debug_log("Redirect drawing to screen\n");
-      delay(3000);
-      debug_log("Viewport lines: temp %X, orig %X\n", m_viewPort, m_saveViewPort);
-      delay(3000);
       delete [] m_viewPort;
       m_viewPort = m_saveViewPort;
       m_saveViewPort = nullptr;
-    } else {
-      debug_log("Nothing to redirect\n");
     }
   }
 }
