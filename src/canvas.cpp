@@ -592,11 +592,7 @@ void Canvas::redirectDrawing(Bitmap const * bitmap)
 {
   Primitive p;
   p.cmd = PrimitiveCmd::RedirectDrawing;
-  if (bitmap) {
-    p.bitmapDrawingInfo = BitmapDrawingInfo(0, 0, bitmap);
-  } else {
-    p.bitmapDrawingInfo = BitmapDrawingInfo(0, 0, nullptr);
-  }
+  p.bitmapDrawingInfo = BitmapDrawingInfo(0, 0, bitmap);
   m_displayController->addPrimitive(p);
 }
 
