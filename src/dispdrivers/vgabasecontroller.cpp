@@ -777,6 +777,7 @@ void IRAM_ATTR VGABaseController::swapBuffers()
   }
 }
 
+extern "C" { extern bool cansavept; }
 
 void VGABaseController::redirectDrawing(Bitmap const * bitmap) {
   if (bitmap) {
@@ -806,13 +807,17 @@ void VGABaseController::redirectDrawing(Bitmap const * bitmap) {
       }
       m_saveViewPort = m_viewPort;
       m_viewPort = lines;
+      s_viewPort = lines;
+      cansavept = true;
     }
   } else {
     // Return drawing to the screen
     if (m_saveViewPort && m_viewPort) {
       delete [] m_viewPort;
       m_viewPort = m_saveViewPort;
+      s_viewPort = m_viewPort;
       m_saveViewPort = nullptr;
+      cansavept = false;
     }
   }
 }

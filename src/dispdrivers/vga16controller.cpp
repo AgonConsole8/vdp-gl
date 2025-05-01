@@ -48,7 +48,18 @@
 #pragma GCC optimize ("O2")
 
 
+bool cansavept;
+uint16_t ptcnt;
+uint16_t ptx[256];
+uint16_t pty[256];
 
+void savept(uint16_t x, uint16_t y) {
+  if (cansavept && (ptcnt < 256)) {
+    ptx[ptcnt] = x;
+    pty[ptcnt] = y;
+    ptcnt++;
+  }
+}
 
 namespace fabgl {
 
@@ -57,6 +68,8 @@ namespace fabgl {
 // high nibble is pixel 0, low nibble is pixel 1
 
 static inline __attribute__((always_inline)) void VGA16_SETPIXELINROW(uint8_t * row, int x, int value) {
+  auto tmprow = (uint8_t*) VGA16Controller::sgetScanline(0);
+  savept(x, (uint16_t)((row-tmprow)/640));
   int brow = x >> 1;
   row[brow] = (x & 1) ? ((row[brow] & 0xf0) | value) : ((row[brow] & 0x0f) | (value << 4));
 }
@@ -69,12 +82,14 @@ static inline __attribute__((always_inline)) int VGA16_GETPIXELINROW(uint8_t * r
 #define VGA16_INVERTPIXELINROW(row, x)       (row)[(x) >> 1] ^= (0xf0 >> (((x) & 1) << 2))
 
 static inline __attribute__((always_inline)) void VGA16_SETPIXEL(int x, int y, int value) {
+  savept(x, y);
   auto row = (uint8_t*) VGA16Controller::sgetScanline(y);
   int brow = x >> 1;
   row[brow] = (x & 1) ? ((row[brow] & 0xf0) | value) : ((row[brow] & 0x0f) | (value << 4));
 }
 
 static inline __attribute__((always_inline)) void VGA16_ORPIXEL(int x, int y, int value) {
+  savept(x, 1);
   auto row = (uint8_t*) VGA16Controller::sgetScanline(y);
   int brow = x >> 1;
   row[brow] |= (x & 1) ? value : (value << 4);
