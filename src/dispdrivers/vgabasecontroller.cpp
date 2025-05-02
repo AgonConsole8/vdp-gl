@@ -777,7 +777,6 @@ void IRAM_ATTR VGABaseController::swapBuffers()
   }
 }
 
-extern "C" { extern bool cansavept; }
 
 void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDrawingInfo) {
   if (redirectDrawingInfo && redirectDrawingInfo->data) {
@@ -794,7 +793,6 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
       m_saveViewPort = m_viewPort;
       m_viewPort = lines;
       s_viewPort = lines;
-      cansavept = true;
     }
   } else {
     // Return drawing to the screen
@@ -803,7 +801,6 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
       m_viewPort = m_saveViewPort;
       s_viewPort = m_viewPort;
       m_saveViewPort = nullptr;
-      cansavept = false;
     }
   }
 }
