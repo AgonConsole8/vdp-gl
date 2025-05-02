@@ -783,12 +783,21 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
     // Redirect drawing to a buffer
     uint16_t line_size = redirectDrawingInfo->width;
     volatile uint8_t** lines = (volatile uint8_t **)
-      heap_caps_malloc(sizeof(uint8_t*) * redirectDrawingInfo->height, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
+      heap_caps_malloc(sizeof(uint8_t*) * m_viewPortHeight, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
     if (lines) {
+      // Because there may be fewer lines in the new buffer than in
+      // the screen buffer, we may point to some lines in the new
+      // buffer multiple times, just for safety. Theoretically, the
+      // app should not attempt to draw outside of the new buffer!
       auto line_address = redirectDrawingInfo->data;
-      for (int i = 0; i < redirectDrawingInfo->height; i++) {
+      uint16_t line_index = 0;
+      for (int i = 0; i < m_viewPortHeight; i++) {
         lines[i] = line_address;
-        line_address += line_size;
+        if (++line_index >= redirectDrawingInfo->height) {
+          line_address = redirectDrawingInfo->data;
+        } else {
+          line_address += line_size;
+        }
       }
       m_saveViewPort = m_viewPort;
       m_viewPort = lines;
@@ -797,7 +806,7 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
   } else {
     // Return drawing to the screen
     if (m_saveViewPort && m_viewPort) {
-      delete [] m_viewPort;
+      heap_caps_free(m_viewPort);
       m_viewPort = m_saveViewPort;
       s_viewPort = m_viewPort;
       m_saveViewPort = nullptr;
