@@ -782,6 +782,12 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
   if (redirectDrawingInfo && redirectDrawingInfo->data) {
     // Redirect drawing to a buffer
     uint16_t line_size = redirectDrawingInfo->width;
+    switch (redirectDrawingInfo->colors) {
+      case 2: line_size /= 8; break;
+      case 4: line_size /= 4; break;
+      case 16: line_size /= 2; break;
+      case 64: break;
+    }
     volatile uint8_t** lines = (volatile uint8_t **)
       heap_caps_malloc(sizeof(uint8_t*) * m_viewPortHeight, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
     if (lines) {
@@ -794,6 +800,7 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
       for (int i = 0; i < m_viewPortHeight; i++) {
         lines[i] = line_address;
         if (++line_index >= redirectDrawingInfo->height) {
+          line_index = 0;
           line_address = redirectDrawingInfo->data;
         } else {
           line_address += line_size;
