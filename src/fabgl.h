@@ -312,8 +312,6 @@
 #include "fabfonts.h"
 #include "terminal.h"
 #include "displaycontroller.h"
-#include "dispdrivers/vgacontroller.h"
-#include "dispdrivers/vgatextcontroller.h"
 #include "dispdrivers/vga2controller.h"
 #include "dispdrivers/vga4controller.h"
 #include "dispdrivers/vga8controller.h"
