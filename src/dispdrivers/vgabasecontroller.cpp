@@ -82,6 +82,7 @@ void VGABaseController::init()
   m_primitiveExecTask            = nullptr;
   m_processPrimitivesOnBlank     = false;
   m_saveViewPort                 = nullptr;
+  m_bufferSize                   = 0;
 
   m_GPIOStream.begin();
 }
@@ -809,14 +810,42 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
       m_saveViewPort = m_viewPort;
       m_viewPort = lines;
       s_viewPort = lines;
+      m_bufferSize = 0;
+
+      // If we are in 64-color mode, we need to swap the pixel pairs, because drawing
+      // will swap pairs, and we don't want garbage on-screen when the bitmap is used.
+      if (redirectDrawingInfo->colors == 64) {
+        m_bufferSize = (uint32_t) m_viewPortHeight * (uint32_t) line_size;
+        uint16_t * pixels = (uint16_t *) redirectDrawingInfo->data;
+        for (uint32_t i = 0; i < m_bufferSize; i+=4) {
+          uint16_t tmp = pixels[1];
+          pixels[1] = pixels[0];
+          pixels[0] = tmp;
+          pixels += 2;
+        } 
+      }
     }
   } else {
     // Return drawing to the screen
     if (m_saveViewPort && m_viewPort) {
+
+      // If we are in 64-color mode, we need to swap the pixel pairs, because drawing
+      // will swap pairs, and we don't want garbage on-screen when the bitmap is used.
+      if (m_bufferSize) {
+        uint16_t * pixels = (uint16_t *) m_viewPort[0];
+        for (uint32_t i = 0; i < m_bufferSize; i+=4) {
+          uint16_t tmp = pixels[1];
+          pixels[1] = pixels[0];
+          pixels[0] = tmp;
+          pixels += 2;
+        } 
+      }
+
       heap_caps_free(m_viewPort);
       m_viewPort = m_saveViewPort;
       s_viewPort = m_viewPort;
       m_saveViewPort = nullptr;
+      m_bufferSize = 0;
     }
   }
 }

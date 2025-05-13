@@ -348,8 +348,9 @@ protected:
   volatile uint8_t * *   m_viewPort;
   volatile uint8_t * *   m_viewPortVisible;
 
-  volatile uint8_t * *   m_saveViewPort; // used when drawing to a bitmap
-
+  volatile uint8_t * *   m_saveViewPort; // used when drawing to a buffer/bitmap
+  uint32_t               m_bufferSize;   // size of the buffer/bitmap used for drawing
+  
   // true: double buffering is implemented in DMA
   bool                   m_doubleBufferOverDMA;
 
