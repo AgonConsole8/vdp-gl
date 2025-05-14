@@ -784,9 +784,9 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
     // Redirect drawing to a buffer
     uint16_t line_size = redirectDrawingInfo->width;
     switch (redirectDrawingInfo->colors) {
-      case 2: line_size /= 8; break;
-      case 4: line_size /= 4; break;
-      case 16: line_size /= 2; break;
+      case 2: line_size = (line_size + 7) / 8; break;
+      case 4: line_size = (line_size + 3) / 4; break;
+      case 16: line_size = (line_size + 1) / 2; break;
       case 64: break;
     }
     volatile uint8_t** lines = (volatile uint8_t **)
@@ -815,7 +815,7 @@ void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDraw
       // If we are in 64-color mode, we need to swap the pixel pairs, because drawing
       // will swap pairs, and we don't want garbage on-screen when the bitmap is used.
       if (redirectDrawingInfo->colors == 64) {
-        m_bufferSize = (uint32_t) m_viewPortHeight * (uint32_t) line_size;
+        m_bufferSize = ((uint32_t) redirectDrawingInfo->height) * ((uint32_t) line_size);
         uint16_t * pixels = (uint16_t *) redirectDrawingInfo->data;
         for (uint32_t i = 0; i < m_bufferSize; i+=4) {
           uint16_t tmp = pixels[1];
