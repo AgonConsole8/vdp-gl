@@ -48,7 +48,6 @@
 
 namespace fabgl {
 
-
 #if FABGLIB_VGAXCONTROLLER_PERFORMANCE_CHECK
   volatile uint64_t s_vgapalctrlcycles = 0;
 #endif
@@ -82,6 +81,8 @@ void VGABaseController::init()
   m_taskProcessingPrimitives     = false;
   m_primitiveExecTask            = nullptr;
   m_processPrimitivesOnBlank     = false;
+  m_saveViewPort                 = nullptr;
+  m_bufferSize                   = 0;
 
   m_GPIOStream.begin();
 }
@@ -120,6 +121,8 @@ void VGABaseController::begin()
 
 void VGABaseController::end()
 {
+  redirectDrawing(nullptr); // to delete extra array if it exists
+
   if (m_DMABuffers) {
     suspendBackgroundPrimitiveExecution();
     vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -772,6 +775,78 @@ void IRAM_ATTR VGABaseController::swapBuffers()
   if (m_doubleBufferOverDMA) {
     tswap(m_DMABuffers, m_DMABuffersVisible);
     m_DMABuffersHead->qe.stqe_next = (lldesc_t*) &m_DMABuffersVisible[0];
+  }
+}
+
+
+void VGABaseController::redirectDrawing(const RedirectDrawingInfo * redirectDrawingInfo) {
+  if (redirectDrawingInfo && redirectDrawingInfo->data) {
+    // Redirect drawing to a buffer
+    uint16_t line_size = redirectDrawingInfo->width;
+    switch (redirectDrawingInfo->colors) {
+      case 2: line_size = (line_size + 7) / 8; break;
+      case 4: line_size = (line_size + 3) / 4; break;
+      case 16: line_size = (line_size + 1) / 2; break;
+      case 64: break;
+    }
+    volatile uint8_t** lines = (volatile uint8_t **)
+      heap_caps_malloc(sizeof(uint8_t*) * m_viewPortHeight, MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL);
+    if (lines) {
+      // Because there may be fewer lines in the new buffer than in
+      // the screen buffer, we may point to some lines in the new
+      // buffer multiple times, just for safety. Theoretically, the
+      // app should not attempt to draw outside of the new buffer!
+      auto line_address = redirectDrawingInfo->data;
+      uint16_t line_index = 0;
+      for (int i = 0; i < m_viewPortHeight; i++) {
+        lines[i] = line_address;
+        if (++line_index >= redirectDrawingInfo->height) {
+          line_index = 0;
+          line_address = redirectDrawingInfo->data;
+        } else {
+          line_address += line_size;
+        }
+      }
+      m_saveViewPort = m_viewPort;
+      m_viewPort = lines;
+      s_viewPort = lines;
+      m_bufferSize = 0;
+
+      // If we are in 64-color mode, we need to swap the pixel pairs, because drawing
+      // will swap pairs, and we don't want garbage on-screen when the bitmap is used.
+      if (redirectDrawingInfo->colors == 64) {
+        m_bufferSize = ((uint32_t) redirectDrawingInfo->height) * ((uint32_t) line_size);
+        uint16_t * pixels = (uint16_t *) redirectDrawingInfo->data;
+        for (uint32_t i = 0; i < m_bufferSize; i+=4) {
+          uint16_t tmp = pixels[1];
+          pixels[1] = pixels[0];
+          pixels[0] = tmp;
+          pixels += 2;
+        } 
+      }
+    }
+  } else {
+    // Return drawing to the screen
+    if (m_saveViewPort && m_viewPort) {
+
+      // If we are in 64-color mode, we need to swap the pixel pairs, because drawing
+      // will swap pairs, and we don't want garbage on-screen when the bitmap is used.
+      if (m_bufferSize) {
+        uint16_t * pixels = (uint16_t *) m_viewPort[0];
+        for (uint32_t i = 0; i < m_bufferSize; i+=4) {
+          uint16_t tmp = pixels[1];
+          pixels[1] = pixels[0];
+          pixels[0] = tmp;
+          pixels += 2;
+        } 
+      }
+
+      heap_caps_free(m_viewPort);
+      m_viewPort = m_saveViewPort;
+      s_viewPort = m_viewPort;
+      m_saveViewPort = nullptr;
+      m_bufferSize = 0;
+    }
   }
 }
 

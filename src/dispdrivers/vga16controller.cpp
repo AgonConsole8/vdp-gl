@@ -48,10 +48,7 @@
 #pragma GCC optimize ("O2")
 
 
-
-
 namespace fabgl {
-
 
 
 // high nibble is pixel 0, low nibble is pixel 1

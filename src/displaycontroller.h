@@ -232,6 +232,14 @@ enum PrimitiveCmd : uint8_t {
   // Set line options
   // params: lineOptions
   SetLineOptions,
+
+  // Redirect drawing to/from a bitmap
+  // params: bitmapDrawingInfo
+  //
+  // If bitmap pointer is non-null, drawing goes to a bitmap (temporarily).
+  // If bitmap pointer is null, drawing goes back to the screen.
+  // X and Y values are ignored.
+  RedirectDrawing,
 };
 
 
@@ -540,6 +548,12 @@ struct BitmapDrawingInfo {
   BitmapDrawingInfo(int X_, int Y_, Bitmap const * bitmap_) : X(X_), Y(Y_), bitmap(bitmap_) { }
 } __attribute__ ((packed));
 
+struct RedirectDrawingInfo {
+  uint8_t *     data;
+  uint16_t      width;
+  uint16_t      height;
+  uint8_t       colors;
+};
 
 struct BitmapTransformedDrawingInfo {
   int16_t        X;
@@ -718,6 +732,7 @@ struct Primitive {
     LinePattern            linePattern;
     LineOptions            lineOptions;
     TaskHandle_t           notifyTask;
+    RedirectDrawingInfo    redirectDrawingInfo;
   } __attribute__ ((packed));
 
   Primitive() { }
@@ -1125,6 +1140,8 @@ protected:
   Sprite * mouseCursor() { return &m_mouseCursor; }
 
   void resetPaintState();
+
+  virtual void redirectDrawing(const RedirectDrawingInfo * redirectDrawingInfo) = 0;
 
 private:
 

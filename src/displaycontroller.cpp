@@ -913,6 +913,9 @@ void IRAM_ATTR BitmappedDisplayController::execPrimitive(Primitive const & prim,
     case PrimitiveCmd::DrawBitmap:
       drawBitmap(prim.bitmapDrawingInfo, updateRect);
       break;
+    case PrimitiveCmd::RedirectDrawing:
+      redirectDrawing(&prim.redirectDrawingInfo);
+      break;
     case PrimitiveCmd::CopyToBitmap:
       copyToBitmap(prim.bitmapDrawingInfo);
       break;

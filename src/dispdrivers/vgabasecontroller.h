@@ -341,11 +341,16 @@ protected:
 
   void calculateAvailableCyclesForDrawings();
 
+  virtual void redirectDrawing(const RedirectDrawingInfo * redirectDrawingInfo);
+
   // when double buffer is enabled the "drawing" view port is always m_viewPort, while the "visible" view port is always m_viewPortVisible
   // when double buffer is not enabled then m_viewPort = m_viewPortVisible
   volatile uint8_t * *   m_viewPort;
   volatile uint8_t * *   m_viewPortVisible;
 
+  volatile uint8_t * *   m_saveViewPort; // used when drawing to a buffer/bitmap
+  uint32_t               m_bufferSize;   // size of the buffer/bitmap used for drawing
+  
   // true: double buffering is implemented in DMA
   bool                   m_doubleBufferOverDMA;
 
